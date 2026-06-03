@@ -1,0 +1,46 @@
+# ─── Local Development Compose ────────────────────────────────────────
+# Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up
+#
+# Builds from source with hot-reload volumes mounted.
+
+services:
+  ai:
+    build:
+      context: ../../services/ai
+      dockerfile: ../../deployment/services/ai/Dockerfile
+    env_file:
+      - ../environments/.env.local.ai
+    volumes:
+      - ../../services/ai:/app
+
+  backend:
+    build:
+      context: ../../services/backend
+      dockerfile: ../../deployment/services/backend/Dockerfile
+    env_file:
+      - ../environments/.env.local.backend
+    volumes:
+      - ../../services/backend:/app
+    environment:
+      DEBUG: "True"
+
+  landing:
+    build:
+      context: ../../services/landing
+      dockerfile: ../../deployment/services/landing/Dockerfile
+    env_file:
+      - ../environments/.env.local.landing
+    environment:
+      NODE_ENV: development
+
+  admin:
+    build:
+      context: ../../services/admin
+      dockerfile: ../../deployment/services/admin/Dockerfile.dev
+    env_file:
+      - ../environments/.env.local.admin
+    volumes:
+      - ../../services/admin:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: development

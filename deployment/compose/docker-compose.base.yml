@@ -1,0 +1,86 @@
+# ─── Base Compose ─────────────────────────────────────────────────────
+# Shared service definitions inherited by local/staging/production.
+# Usage: docker compose -f docker-compose.base.yml -f <env>/docker-compose.yml up
+
+x-common-env: &common-env
+  restart: unless-stopped
+
+services:
+  ai:
+    <<: *common-env
+    container_name: ${PROJECT_NAME:-hairiq}-ai
+    ports:
+      - "${AI_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - app-network
+
+  backend:
+    <<: *common-env
+    container_name: ${PROJECT_NAME:-hairiq}-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - app-network
+
+  landing:
+    <<: *common-env
+    container_name: ${PROJECT_NAME:-hairiq}-landing
+    ports:
+      - "${LANDING_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+  admin:
+    <<: *common-env
+    container_name: ${PROJECT_NAME:-hairiq}-admin
+    ports:
+      - "${ADMIN_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+volumes:
+  media_data:
+    driver: local
+  static_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

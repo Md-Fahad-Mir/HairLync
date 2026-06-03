@@ -1,0 +1,59 @@
+name: HairIQ Deploy to Staging
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+
+env:
+  IMAGE_TAG: staging
+
+jobs:
+  build:
+    name: Build & Push Staging Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push all services (staging tag)
+        run: |
+          for service in backend ai landing admin; do
+            docker build \
+              -f ./deployment/services/$service/Dockerfile \
+              -t ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-$service:staging \
+              ./services/$service
+            docker push ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-$service:staging
+          done
+
+  deploy:
+    name: Deploy to Staging EC2
+    runs-on: ubuntu-latest
+    needs: build
+    environment: staging
+
+    steps:
+      - name: SSH to staging EC2 and deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /home/ubuntu/hairiq
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              python manage.py migrate --noinput --fake-initial

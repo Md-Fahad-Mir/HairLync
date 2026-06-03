@@ -1,0 +1,69 @@
+name: HairIQ PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ─── Backend ──────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install backend dependencies
+        run: |
+          cd services/backend
+          uv export --no-dev --frozen > requirements.txt
+          pip install -r requirements.txt
+
+      - name: Run Django checks
+        run: |
+          cd services/backend
+          python manage.py check --settings=core.settings
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-test-secret-key
+          DB_ENGINE: django.db.backends.sqlite3
+          DB_NAME: ":memory:"
+          DJANGO_ALLOWED_HOSTS: "localhost"
+
+      # ─── Docker Lint ──────────────────────────────────────────────
+      - name: Validate Dockerfiles
+        run: |
+          docker build --no-cache --target builder -f deployment/services/backend/Dockerfile ./services/backend 2>&1 | tail -5
+          docker build --no-cache --target builder -f deployment/services/ai/Dockerfile ./services/ai 2>&1 | tail -5
+
+      # ─── Compose Validation ───────────────────────────────────────
+      - name: Validate docker-compose files
+        run: |
+          docker compose -f deployment/compose/docker-compose.base.yml config --quiet
+
+      # ─── Terraform Validate ───────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.5"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infrastructure/terraform/
+
+      - name: Terraform Validate (production)
+        run: |
+          cd infrastructure/terraform/environments/production
+          terraform init -backend=false
+          terraform validate

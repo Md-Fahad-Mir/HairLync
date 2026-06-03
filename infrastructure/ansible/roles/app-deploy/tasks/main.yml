@@ -1,0 +1,47 @@
+---
+# ─── Role: app-deploy ─────────────────────────────────────────────────
+# Creates project directories, copies env files, deploys docker compose.
+
+- name: Create project directory
+  file:
+    path: "{{ project_path }}"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+
+- name: Create service subdirectories
+  file:
+    path: "{{ project_path }}/{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+  loop:
+    - backend
+    - ai
+    - landing
+    - admin
+
+- name: Copy service .env files to server
+  copy:
+    src: "{{ playbook_dir }}/../../../deployment/environments/.env.production.{{ item }}"
+    dest: "{{ project_path }}/{{ item }}/.env"
+    mode: '0600'
+    owner: ubuntu
+    group: ubuntu
+  loop:
+    - backend
+    - ai
+    - landing
+    - admin
+  notify: restart docker compose
+
+- name: Copy docker-compose.prod.yml to server
+  copy:
+    src: "{{ playbook_dir }}/../../../deployment/compose/production/docker-compose.yml"
+    dest: "{{ project_path }}/docker-compose.prod.yml"
+    mode: '0644'
+    owner: ubuntu
+    group: ubuntu
+  notify: restart docker compose

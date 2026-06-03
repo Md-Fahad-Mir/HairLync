@@ -1,0 +1,4 @@
+# ─── HairIQ Staging Overrides ─────────────────────────────────────────
+env: staging
+website_domain: "staging.hairiq.io"
+certbot_email: "hairlyncapp@gmail.com"
