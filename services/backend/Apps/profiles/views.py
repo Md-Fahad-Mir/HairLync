@@ -6,13 +6,18 @@ from django.db.models import Q
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from .models import ClientProfile, BarberProfile, EmployeeProfile
+from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee
 from .serializers import (
     ClientProfileSerializer, ClientProfileUpdateSerializer,
     BarberProfileSerializer, BarberProfileUpdateSerializer, BarberProfileListSerializer,
-    EmployeeProfileSerializer, EmployeeCreateSerializer,
+    SalonProfileSerializer, SalonProfileUpdateSerializer, SalonProfileListSerializer,
+    SalonEmployeeSerializer, SalonEmployeePublicSerializer,
+    SalonEmployeeCreateSerializer, SalonEmployeeUpdateSerializer,
 )
-from Apps.users.permissions import IsClient, IsBarber, IsSubscribedBarber, IsAdminUser
+from Apps.users.permissions import (
+    IsClient, IsBarber, IsSubscribedBarber, IsAdminUser,
+    IsSalon, IsSalonOwner, IsSalonEmployee, IsSalonOrEmployee,
+)
 from Apps.users.utils import success_response, error_response
 
 User = get_user_model()
@@ -123,7 +128,7 @@ class BarberProfileDetailView(generics.RetrieveAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return BarberProfile.objects.filter(is_verified=True, user__is_active=True)
+        return BarberProfile.objects.filter(user__is_active=True)
 
 
 class BarberSearchView(generics.ListAPIView):
@@ -160,109 +165,240 @@ class BarberSearchView(generics.ListAPIView):
 
 
 # ==============================================================================
-# EMPLOYEE MANAGEMENT VIEWS
+# SALON PROFILE VIEWS
 # ==============================================================================
-class EmployeeListCreateView(APIView):
-    """List and create employees for a barber business."""
-    permission_classes = [IsAuthenticated, IsBarber]
+class SalonProfileView(APIView):
+    """Get or create/update the salon's business profile."""
+    permission_classes = [IsAuthenticated, IsSalonOwner]
 
     @swagger_auto_schema(
-        operation_description="List all employees under the current barber's business.",
-        responses={200: EmployeeProfileSerializer(many=True)},
-        tags=['Employee Management'],
+        operation_description="Get the current salon's business profile.",
+        responses={200: SalonProfileSerializer},
+        tags=['Salon Profile'],
     )
     def get(self, request):
         try:
-            barber_profile = request.user.barber_profile
-        except BarberProfile.DoesNotExist:
-            return error_response("Barber profile not found.", status_code=404)
-
-        employees = EmployeeProfile.objects.filter(barber=barber_profile)
-        serializer = EmployeeProfileSerializer(employees, many=True)
+            profile = SalonProfile.objects.get(user=request.user)
+        except SalonProfile.DoesNotExist:
+            return error_response("Salon profile not found. Create one first.", status_code=404)
+        serializer = SalonProfileSerializer(profile)
         return success_response(data=serializer.data)
 
     @swagger_auto_schema(
-        operation_description="Add a new employee to the barber's business.",
-        request_body=EmployeeCreateSerializer,
-        responses={201: EmployeeProfileSerializer},
-        tags=['Employee Management'],
+        operation_description="Create or update the salon's business profile.",
+        request_body=SalonProfileUpdateSerializer,
+        responses={200: SalonProfileSerializer},
+        tags=['Salon Profile'],
     )
     def post(self, request):
-        serializer = EmployeeCreateSerializer(data=request.data)
+        profile, created = SalonProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'business_name': request.data.get('business_name', request.user.full_name)}
+        )
+        serializer = SalonProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        msg = "Salon profile created successfully." if created else "Salon profile updated successfully."
+        return success_response(data=SalonProfileSerializer(profile).data, message=msg)
+
+    @swagger_auto_schema(
+        operation_description="Update the salon's business profile.",
+        request_body=SalonProfileUpdateSerializer,
+        responses={200: SalonProfileSerializer},
+        tags=['Salon Profile'],
+    )
+    def patch(self, request):
+        try:
+            profile = SalonProfile.objects.get(user=request.user)
+        except SalonProfile.DoesNotExist:
+            return error_response("Salon profile not found.", status_code=404)
+        serializer = SalonProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return success_response(
+            data=SalonProfileSerializer(profile).data,
+            message="Salon profile updated successfully.",
+        )
+
+
+class SalonProfileDetailView(generics.RetrieveAPIView):
+    """Public view to see a salon's profile (includes employees)."""
+    serializer_class = SalonProfileSerializer
+    permission_classes = [AllowAny]
+    lookup_field = 'pk'
+
+    @swagger_auto_schema(
+        operation_description="View a salon's public profile with employee list.",
+        tags=['Salon Search'],
+    )
+    def get(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = SalonProfileSerializer(instance)
+        data = serializer.data
+
+        # Include public employee info ("Our Professionals" section)
+        employees = SalonEmployee.objects.filter(salon=instance, is_active=True)
+        data['professionals'] = SalonEmployeePublicSerializer(employees, many=True).data
+
+        return success_response(data=data)
+
+    def get_queryset(self):
+        return SalonProfile.objects.filter(user__is_active=True)
+
+
+class SalonSearchView(generics.ListAPIView):
+    """Search and filter salons (public)."""
+    serializer_class = SalonProfileListSerializer
+    permission_classes = [AllowAny]
+    filterset_fields = ['city', 'is_verified', 'is_accepting_clients']
+    search_fields = ['business_name', 'city', 'user__full_name']
+    ordering_fields = ['average_rating', 'total_reviews', 'experience_years', 'created_at']
+
+    @swagger_auto_schema(
+        operation_description="Search for salons by location, rating, etc.",
+        manual_parameters=[
+            openapi.Parameter('search', openapi.IN_QUERY, description="Search by name or city", type=openapi.TYPE_STRING),
+            openapi.Parameter('city', openapi.IN_QUERY, description="Filter by city", type=openapi.TYPE_STRING),
+            openapi.Parameter('min_rating', openapi.IN_QUERY, description="Minimum rating", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('ordering', openapi.IN_QUERY, description="Order by field", type=openapi.TYPE_STRING),
+        ],
+        tags=['Salon Search'],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qs = SalonProfile.objects.filter(user__is_active=True)
+        min_rating = self.request.query_params.get('min_rating')
+        if min_rating:
+            try:
+                qs = qs.filter(average_rating__gte=float(min_rating))
+            except (ValueError, TypeError):
+                pass
+        return qs
+
+
+# ==============================================================================
+# SALON EMPLOYEE (SUB-PROFILE) MANAGEMENT VIEWS
+# ==============================================================================
+class SalonEmployeeListCreateView(APIView):
+    """
+    List and create employees for a salon business.
+    Only the salon OWNER can create employees (sub-profiles).
+    """
+    permission_classes = [IsAuthenticated, IsSalonOwner]
+
+    @swagger_auto_schema(
+        operation_description="List all employees under the current salon.",
+        responses={200: SalonEmployeeSerializer(many=True)},
+        tags=['Salon Employee Management'],
+    )
+    def get(self, request):
+        try:
+            salon_profile = request.user.salon_profile
+        except SalonProfile.DoesNotExist:
+            return error_response("Salon profile not found. Create one first.", status_code=404)
+
+        employees = SalonEmployee.objects.filter(salon=salon_profile)
+        serializer = SalonEmployeeSerializer(employees, many=True)
+        return success_response(data=serializer.data)
+
+    @swagger_auto_schema(
+        operation_description=(
+            "Add a new employee to the salon. Only requires full_name. "
+            "Email and password are auto-generated. "
+            "Format: email=firstname+lastname+2digits@hairlync.app, "
+            "password=8 random chars."
+        ),
+        request_body=SalonEmployeeCreateSerializer,
+        responses={201: SalonEmployeeSerializer},
+        tags=['Salon Employee Management'],
+    )
+    def post(self, request):
+        serializer = SalonEmployeeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            barber_profile = request.user.barber_profile
-        except BarberProfile.DoesNotExist:
-            return error_response("Barber profile not found.", status_code=404)
+            salon_profile = request.user.salon_profile
+        except SalonProfile.DoesNotExist:
+            return error_response("Salon profile not found. Create one first.", status_code=404)
 
-        email = serializer.validated_data['email']
+        full_name = serializer.validated_data['full_name']
+        name_parts = full_name.split()
+        first_name = name_parts[0]
+        last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
 
-        if User.objects.filter(email=email).exists():
-            return error_response("A user with this email already exists.", status_code=400)
+        # Auto-generate credentials
+        generated_email = SalonEmployee.generate_employee_email(first_name, last_name)
+        generated_password = SalonEmployee.generate_employee_password()
 
-        # Create employee user
+        # Create the sub-profile user account
         employee_user = User.objects.create_user(
-            email=email,
-            password=serializer.validated_data['password'],
-            full_name=serializer.validated_data['full_name'],
-            role='barber',
+            email=generated_email,
+            password=generated_password,
+            full_name=full_name,
+            role='salon',
             is_active=True,
             is_verified=True,
+            is_sub_profile=True,
+            parent_salon=request.user,
         )
 
-        # Create employee profile
-        employee = EmployeeProfile.objects.create(
-            barber=barber_profile,
+        # Create the employee profile
+        employee = SalonEmployee.objects.create(
+            salon=salon_profile,
             user=employee_user,
-            position=serializer.validated_data.get('position', 'Stylist'),
-            can_manage_bookings=serializer.validated_data.get('can_manage_bookings', True),
-            can_manage_schedule=serializer.validated_data.get('can_manage_schedule', True),
-            can_access_tools=serializer.validated_data.get('can_access_tools', True),
+            generated_email=generated_email,
+            generated_password=generated_password,
+            position=serializer.validated_data.get('position', 'Hair Stylist'),
+            role_title=serializer.validated_data.get('role_title', 'Hair Stylist'),
         )
 
         return success_response(
-            data=EmployeeProfileSerializer(employee).data,
+            data=SalonEmployeeSerializer(employee).data,
             message="Employee added successfully.",
             status_code=201,
         )
 
 
-class EmployeeDetailView(APIView):
-    """Get, update, or delete a specific employee."""
-    permission_classes = [IsAuthenticated, IsBarber]
+class SalonEmployeeDetailView(APIView):
+    """
+    Get, update, or delete a specific salon employee.
+    Only the salon OWNER can manage employees.
+    """
+    permission_classes = [IsAuthenticated, IsSalonOwner]
 
     @swagger_auto_schema(
-        operation_description="Get employee details.",
-        responses={200: EmployeeProfileSerializer},
-        tags=['Employee Management'],
+        operation_description="Get employee details (includes generated credentials).",
+        responses={200: SalonEmployeeSerializer},
+        tags=['Salon Employee Management'],
     )
     def get(self, request, pk):
         employee = self._get_employee(request, pk)
         if not employee:
             return error_response("Employee not found.", status_code=404)
-        return success_response(data=EmployeeProfileSerializer(employee).data)
+        return success_response(data=SalonEmployeeSerializer(employee).data)
 
     @swagger_auto_schema(
         operation_description="Update employee details.",
-        request_body=EmployeeProfileSerializer,
-        tags=['Employee Management'],
+        request_body=SalonEmployeeUpdateSerializer,
+        tags=['Salon Employee Management'],
     )
     def patch(self, request, pk):
         employee = self._get_employee(request, pk)
         if not employee:
             return error_response("Employee not found.", status_code=404)
-        serializer = EmployeeProfileSerializer(employee, data=request.data, partial=True)
+        serializer = SalonEmployeeUpdateSerializer(employee, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return success_response(
-            data=EmployeeProfileSerializer(employee).data,
+            data=SalonEmployeeSerializer(employee).data,
             message="Employee updated successfully.",
         )
 
     @swagger_auto_schema(
-        operation_description="Remove an employee.",
-        tags=['Employee Management'],
+        operation_description="Remove an employee. Deactivates their user account.",
+        tags=['Salon Employee Management'],
     )
     def delete(self, request, pk):
         employee = self._get_employee(request, pk)
@@ -276,7 +412,46 @@ class EmployeeDetailView(APIView):
 
     def _get_employee(self, request, pk):
         try:
-            barber_profile = request.user.barber_profile
-            return EmployeeProfile.objects.get(pk=pk, barber=barber_profile)
-        except (BarberProfile.DoesNotExist, EmployeeProfile.DoesNotExist):
+            salon_profile = request.user.salon_profile
+            return SalonEmployee.objects.get(pk=pk, salon=salon_profile)
+        except (SalonProfile.DoesNotExist, SalonEmployee.DoesNotExist):
             return None
+
+
+class SalonEmployeeSelfProfileView(APIView):
+    """
+    Allow salon employee (sub-profile) to view and update their OWN profile.
+    They cannot access other employees' profiles or the salon owner's profile.
+    """
+    permission_classes = [IsAuthenticated, IsSalonEmployee]
+
+    @swagger_auto_schema(
+        operation_description="Get the current employee's own profile.",
+        responses={200: SalonEmployeeSerializer},
+        tags=['Salon Employee Self'],
+    )
+    def get(self, request):
+        try:
+            employee = SalonEmployee.objects.get(user=request.user)
+        except SalonEmployee.DoesNotExist:
+            return error_response("Employee profile not found.", status_code=404)
+        serializer = SalonEmployeeSerializer(employee)
+        return success_response(data=serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Update the current employee's own profile.",
+        request_body=SalonEmployeeUpdateSerializer,
+        tags=['Salon Employee Self'],
+    )
+    def patch(self, request):
+        try:
+            employee = SalonEmployee.objects.get(user=request.user)
+        except SalonEmployee.DoesNotExist:
+            return error_response("Employee profile not found.", status_code=404)
+        serializer = SalonEmployeeUpdateSerializer(employee, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return success_response(
+            data=SalonEmployeeSerializer(employee).data,
+            message="Profile updated successfully.",
+        )

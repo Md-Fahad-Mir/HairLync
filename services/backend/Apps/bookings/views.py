@@ -125,8 +125,9 @@ class BarberBookingListView(generics.ListAPIView):
         user = self.request.user
         if hasattr(user, 'barber_profile'):
             return Booking.objects.filter(barber=user.barber_profile)
-        elif hasattr(user, 'employee_profile'):
-            return Booking.objects.filter(barber=user.employee_profile.barber)
+        elif hasattr(user, 'employee_profile') and hasattr(user.employee_profile, 'salon'):
+            # Salon employees see bookings for their salon
+            return Booking.objects.filter(employee=user.employee_profile)
         return Booking.objects.none()
 
 
@@ -184,8 +185,8 @@ class BarberBookingStatusView(APIView):
         try:
             if hasattr(request.user, 'barber_profile'):
                 return Booking.objects.get(pk=pk, barber=request.user.barber_profile)
-            elif hasattr(request.user, 'employee_profile'):
-                return Booking.objects.get(pk=pk, barber=request.user.employee_profile.barber)
+            elif hasattr(request.user, 'employee_profile') and hasattr(request.user.employee_profile, 'salon'):
+                return Booking.objects.get(pk=pk, employee=request.user.employee_profile)
         except Booking.DoesNotExist:
             return None
         return None
@@ -251,8 +252,8 @@ class BarberBookingRescheduleView(APIView):
         try:
             if hasattr(request.user, 'barber_profile'):
                 return Booking.objects.get(pk=pk, barber=request.user.barber_profile)
-            elif hasattr(request.user, 'employee_profile'):
-                return Booking.objects.get(pk=pk, barber=request.user.employee_profile.barber)
+            elif hasattr(request.user, 'employee_profile') and hasattr(request.user.employee_profile, 'salon'):
+                return Booking.objects.get(pk=pk, employee=request.user.employee_profile)
         except Booking.DoesNotExist:
             return None
         return None
@@ -308,8 +309,6 @@ class TimeSlotListCreateView(APIView):
     def _get_barber_profile(self, request):
         if hasattr(request.user, 'barber_profile'):
             return request.user.barber_profile
-        elif hasattr(request.user, 'employee_profile'):
-            return request.user.employee_profile.barber
         return None
 
 

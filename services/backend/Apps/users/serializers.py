@@ -62,6 +62,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'role': self.user.role,
             'is_verified': self.user.is_verified,
             'is_subscribed': self.user.is_subscribed(),
+            'is_sub_profile': self.user.is_sub_profile,
         }
         return data
 
@@ -111,10 +112,12 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'full_name', 'phone_number', 'country',
             'role', 'is_active', 'is_verified', 'date_joined',
             'paid_user', 'current_plan', 'is_subscribed',
+            'is_sub_profile', 'parent_salon',
         ]
         read_only_fields = [
             'id', 'email', 'role', 'is_active', 'is_verified',
             'date_joined', 'paid_user', 'current_plan',
+            'is_sub_profile', 'parent_salon',
         ]
 
     def get_is_subscribed(self, obj):

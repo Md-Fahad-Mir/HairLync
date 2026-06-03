@@ -26,7 +26,7 @@ class IsBarber(BasePermission):
 
 
 class IsSalon(BasePermission):
-    """Allow access only to salon users."""
+    """Allow access only to salon users (both owner and employee)."""
     message = "Only salons can access this resource."
 
     def has_permission(self, request, view):
@@ -35,6 +35,42 @@ class IsSalon(BasePermission):
             and request.user.is_authenticated
             and request.user.role == 'salon'
         )
+
+
+class IsSalonOwner(BasePermission):
+    """Allow access only to salon OWNER accounts (not sub-profiles)."""
+    message = "Only salon owners can access this resource."
+
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == 'salon'
+            and not request.user.is_sub_profile
+        )
+
+
+class IsSalonEmployee(BasePermission):
+    """Allow access only to salon EMPLOYEE sub-profile accounts."""
+    message = "Only salon employees can access this resource."
+
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == 'salon'
+            and request.user.is_sub_profile
+        )
+
+
+class IsSalonOrEmployee(BasePermission):
+    """Allow access to salon owners OR their employees."""
+    message = "Only salon owners or their employees can access this resource."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.role == 'salon'
 
 
 class IsBarberOrSubBarber(BasePermission):
@@ -97,3 +133,16 @@ class IsVerifiedUser(BasePermission):
             and request.user.is_authenticated
             and request.user.is_verified
         )
+
+
+class IsNotSubProfile(BasePermission):
+    """
+    Deny access to sub-profile (employee) users for restricted actions.
+    Sub-profiles cannot: delete accounts, create sub-profiles, manage the salon.
+    """
+    message = "Sub-profile accounts cannot perform this action."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return not request.user.is_sub_profile

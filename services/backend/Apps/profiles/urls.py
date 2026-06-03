@@ -14,7 +14,17 @@ urlpatterns = [
     path('barber/<int:pk>/', views.BarberProfileDetailView.as_view(), name='barber-detail'),
     path('barbers/search/', views.BarberSearchView.as_view(), name='barber-search'),
 
-    # Employee management
-    path('employees/', views.EmployeeListCreateView.as_view(), name='employee-list-create'),
-    path('employees/<int:pk>/', views.EmployeeDetailView.as_view(), name='employee-detail'),
+    # Salon profile (own)
+    path('salon/', views.SalonProfileView.as_view(), name='salon-profile'),
+
+    # Salon public
+    path('salon/<int:pk>/', views.SalonProfileDetailView.as_view(), name='salon-detail'),
+    path('salons/search/', views.SalonSearchView.as_view(), name='salon-search'),
+
+    # Salon employee management (salon owner only)
+    path('salon/employees/', views.SalonEmployeeListCreateView.as_view(), name='salon-employee-list-create'),
+    path('salon/employees/<int:pk>/', views.SalonEmployeeDetailView.as_view(), name='salon-employee-detail'),
+
+    # Salon employee self-profile (sub-profile user)
+    path('employee/me/', views.SalonEmployeeSelfProfileView.as_view(), name='salon-employee-self'),
 ]

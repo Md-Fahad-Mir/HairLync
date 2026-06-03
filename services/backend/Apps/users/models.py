@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.utils import timezone
 from django.db import models
 import random
+import string
 from django.conf import settings
 
 
@@ -65,6 +66,21 @@ class CustomUserModel(AbstractBaseUser, PermissionsMixin):
     country = models.CharField(max_length=100, blank=True, default='')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='client', db_index=True)
 
+    # Sub-profile fields (for salon employees)
+    is_sub_profile = models.BooleanField(
+        default=False,
+        help_text='True if this user is a salon employee sub-profile account.'
+    )
+    parent_salon = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='sub_profiles',
+        limit_choices_to={'role': 'salon', 'is_sub_profile': False},
+        help_text='The salon owner who created this sub-profile.',
+    )
+
     # Status fields
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -98,6 +114,16 @@ class CustomUserModel(AbstractBaseUser, PermissionsMixin):
     @property
     def is_salon(self):
         return self.role == 'salon'
+
+    @property
+    def is_salon_owner(self):
+        """True if this is a salon account that is NOT a sub-profile."""
+        return self.role == 'salon' and not self.is_sub_profile
+
+    @property
+    def is_salon_employee(self):
+        """True if this is a salon sub-profile (employee)."""
+        return self.role == 'salon' and self.is_sub_profile
 
     @property
     def is_admin_user(self):

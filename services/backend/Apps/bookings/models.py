@@ -41,7 +41,7 @@ class Booking(models.Model):
         related_name='bookings',
     )
     employee = models.ForeignKey(
-        'profiles.EmployeeProfile',
+        'profiles.SalonEmployee',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -116,7 +116,7 @@ class TimeSlot(models.Model):
         related_name='time_slots',
     )
     employee = models.ForeignKey(
-        'profiles.EmployeeProfile',
+        'profiles.SalonEmployee',
         on_delete=models.CASCADE,
         null=True,
         blank=True,
