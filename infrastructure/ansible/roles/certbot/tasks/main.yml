@@ -1,0 +1,32 @@
+---
+# ─── Role: certbot ────────────────────────────────────────────────────
+# Installs Certbot and provisions SSL certs for all HairIQ subdomains.
+
+- name: Install Certbot and Nginx plugin
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+
+- name: Obtain SSL certificate for all HairIQ subdomains
+  command: >
+    certbot --nginx
+    -d {{ website_domain }}
+    -d www.{{ website_domain }}
+    -d api.{{ website_domain }}
+    -d ai.{{ website_domain }}
+    -d admin.{{ website_domain }}
+    --non-interactive
+    --agree-tos
+    -m {{ certbot_email }}
+    --expand
+  register: certbot_result
+  changed_when: "'Certificate not yet due for renewal' not in certbot_result.stdout"
+
+- name: Ensure certbot auto-renewal timer is enabled
+  service:
+    name: certbot.timer
+    state: started
+    enabled: yes

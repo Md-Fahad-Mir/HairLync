@@ -1,0 +1,26 @@
+# ─── Production Compose ───────────────────────────────────────────────
+# Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up -d
+#
+# Pulls pre-built images from Docker Hub (pushed by CI/CD).
+
+services:
+  ai:
+    image: ${DOCKERHUB_USERNAME}/hairiq-ai:${IMAGE_TAG:-latest}
+    env_file:
+      - ../environments/.env.production.ai
+
+  backend:
+    image: ${DOCKERHUB_USERNAME}/hairiq-backend:${IMAGE_TAG:-latest}
+    env_file:
+      - ../environments/.env.production.backend
+    restart: always
+
+  landing:
+    image: ${DOCKERHUB_USERNAME}/hairiq-landing:${IMAGE_TAG:-latest}
+    env_file:
+      - ../environments/.env.production.landing
+
+  admin:
+    image: ${DOCKERHUB_USERNAME}/hairiq-admin:${IMAGE_TAG:-latest}
+    env_file:
+      - ../environments/.env.production.admin

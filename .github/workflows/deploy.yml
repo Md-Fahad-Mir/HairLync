@@ -1,0 +1,114 @@
+name: HairIQ CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # ─── Build & Push ───────────────────────────────────────────────────
+  build:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/backend
+          file: ./deployment/services/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-backend:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push AI service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/ai
+          file: ./deployment/services/ai/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-ai:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-ai:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push landing page
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/landing
+          file: ./deployment/services/landing/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-landing:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-landing:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push admin dashboard
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/admin
+          file: ./deployment/services/admin/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-admin:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-admin:${{ env.IMAGE_TAG }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Deploy to Production ───────────────────────────────────────────
+  deploy:
+    name: Deploy to Production EC2
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+      - name: SSH to EC2 and deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /home/ubuntu/hairiq
+
+            # Clean up dangling images to prevent disk exhaustion
+            docker system prune -af --filter "until=24h"
+
+            # Pull latest images
+            docker compose -f docker-compose.prod.yml pull
+
+            # Rolling restart with zero-downtime where possible
+            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
+
+            # Run DB migrations (idempotent)
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              python manage.py migrate --noinput --fake-initial
+
+            # Verify all services are healthy
+            sleep 10
+            docker compose -f docker-compose.prod.yml ps

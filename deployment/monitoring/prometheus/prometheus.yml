@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: 'hairiq'
+    environment: 'production'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node exporter (EC2 system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+
+  # Django backend (requires django-prometheus)
+  - job_name: 'hairiq-backend'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: /metrics
+
+  # FastAPI AI service (Hair Analysis)
+  - job_name: 'hairiq-ai'
+    static_configs:
+      - targets: ['localhost:8001']
+    metrics_path: /metrics
