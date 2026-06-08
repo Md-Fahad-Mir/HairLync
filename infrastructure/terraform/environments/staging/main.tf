@@ -1,4 +1,7 @@
 # ─── HairIQ Staging Environment ───────────────────────────────────────
+# Init:  terraform init -backend-config=backend.hcl
+# Apply: terraform apply   (secrets come from terraform.tfvars / TF_VAR_*)
+
 module "infra" {
   source = "../../shared"
 
@@ -6,12 +9,11 @@ module "infra" {
   environment  = "staging"
   region       = "eu-north-1"
   aws_profile  = "default"
-  domain       = "staging.hairiq.io"
+  domain       = "staging.hairlync.com"
 
-  # Compute — smaller for staging
+  # Compute — smaller for staging; latest Ubuntu 24.04 auto-selected.
   instance_type   = "t3.small"
-  ami             = "ami-XXXXXXXXXXXXXXXXX"
-  public_key_path = "~/.ssh/id_rsa.pub"
+  public_key_path = var.public_key_path
 
   # Database
   db_username          = var.db_username
@@ -22,8 +24,8 @@ module "infra" {
   # Storage
   bucket_name = "hairiq-media-staging"
 
-  # Networking
-  allowed_ssh_cidrs = ["YOUR.PUBLIC.IP/32"]
+  # Networking — your IP(s), provided via terraform.tfvars (never committed)
+  allowed_ssh_cidrs = var.allowed_ssh_cidrs
 }
 
 variable "db_username" {
@@ -34,6 +36,17 @@ variable "db_username" {
 variable "db_password" {
   type      = string
   sensitive = true
+}
+
+variable "allowed_ssh_cidrs" {
+  description = "CIDRs allowed to SSH, e.g. [\"1.2.3.4/32\"]"
+  type        = list(string)
+}
+
+variable "public_key_path" {
+  description = "Path to your SSH public key"
+  type        = string
+  default     = "~/.ssh/id_rsa.pub"
 }
 
 output "server_ip" {

@@ -45,8 +45,8 @@ jobs:
       # ─── Docker Lint ──────────────────────────────────────────────
       - name: Validate Dockerfiles
         run: |
-          docker build --no-cache --target builder -f deployment/services/backend/Dockerfile ./services/backend 2>&1 | tail -5
-          docker build --no-cache --target builder -f deployment/services/ai/Dockerfile ./services/ai 2>&1 | tail -5
+          docker build --no-cache --target builder -f services/backend/Dockerfile ./services/backend 2>&1 | tail -5
+          docker build --no-cache --target builder -f services/ai/Dockerfile ./services/ai 2>&1 | tail -5
 
       # ─── Compose Validation ───────────────────────────────────────
       - name: Validate docker-compose files

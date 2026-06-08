@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
+
+* {
+  font-family: "Poppins", sans-serif;
+}
+
+@theme {
+  --font-Lato: "Lato", sans-serif;
+  --font-PlusJakartaSans: "Plus Jakarta Sans", sans-serif;
+}
+
+.button-gradient {
+  background: linear-gradient(to bottom, #4b8cff, #adcbff);
+  font-family: var(--font-Lato);
+  height: 36px;
+  width: 160px;
+  border-radius: 4px;
+  box-shadow: 0 3px 6px 0 rgba(0, 0, 0, 0.16);
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+.text-gradient-testimonial {
+  background: linear-gradient(to right, #4b8cff, #adcbff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-feature {
+  background: linear-gradient(to right, #4b8cff, #adcbff);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.fade-text {
+  width: 300px;
+  overflow: hidden;
+  white-space: nowrap;
+
+  /* text movement */
+  animation: slide 5s linear infinite;
+
+  /* fade effect (left visible, right invisible) */
+  mask-image: linear-gradient(to right, black 70%, transparent);
+  -webkit-mask-image: linear-gradient(to right, black 70%, transparent);
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}

@@ -123,6 +123,7 @@ override.tf.json
 .terraform.lock.hcl
 .terraformrc
 terraform.rc
+backend.hcl
 
 # ─── 7. Ansible ───────────────────────────────────────────────────────────────
 *.retry
@@ -155,3 +156,5 @@ desktop.ini
 *.bak
 temp/
 tmp/
+
+AWS.text

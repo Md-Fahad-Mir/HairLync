@@ -7,7 +7,7 @@ services:
   ai:
     build:
       context: ../../services/ai
-      dockerfile: ../../deployment/services/ai/Dockerfile
+      dockerfile: Dockerfile
     env_file:
       - ../environments/.env.local.ai
     volumes:
@@ -16,7 +16,7 @@ services:
   backend:
     build:
       context: ../../services/backend
-      dockerfile: ../../deployment/services/backend/Dockerfile
+      dockerfile: Dockerfile
     env_file:
       - ../environments/.env.local.backend
     volumes:
@@ -27,7 +27,7 @@ services:
   landing:
     build:
       context: ../../services/landing
-      dockerfile: ../../deployment/services/landing/Dockerfile
+      dockerfile: Dockerfile
     env_file:
       - ../environments/.env.local.landing
     environment:
@@ -36,7 +36,9 @@ services:
   admin:
     build:
       context: ../../services/admin
-      dockerfile: ../../deployment/services/admin/Dockerfile.dev
+      dockerfile: Dockerfile
+      target: deps
+    command: npm run dev
     env_file:
       - ../environments/.env.local.admin
     volumes:

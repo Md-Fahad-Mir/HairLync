@@ -79,7 +79,7 @@ up-prod:
 # ─── Terraform ────────────────────────────────────────────────────────
 tf-plan:
 	cd infrastructure/terraform/environments/$(ENV) && \
-		terraform init && terraform plan
+		terraform init -backend-config=backend.hcl && terraform plan
 
 tf-apply:
 	bash deployment/scripts/terraform-apply.sh $(ENV)

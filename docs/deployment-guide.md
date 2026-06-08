@@ -92,7 +92,7 @@ Deployments happen **automatically** on push to `main`:
 | Variable | Description |
 |----------|-------------|
 | `PROJECT_NAME` | `hairiq` |
-| `NEXT_PUBLIC_API_URL` | `https://api.hairiq.io` |
+| `NEXT_PUBLIC_API_URL` | `https://api.hairlync.com` |
 
 ---
 

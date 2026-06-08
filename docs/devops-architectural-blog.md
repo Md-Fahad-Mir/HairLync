@@ -199,7 +199,7 @@ This sequence automates the system bootstrap steps:
 1.  **`docker`**: Downloads GPG keys, sets up the repository codename fallback (e.g., `noble` fallback for Ubuntu 24.04), and installs the container runtimes.
 2.  **`nginx`**: Deploys rate limiting limits, proxy parameters, and site definitions.
 3.  **`app-deploy`**: Securely places our `.env` files and `docker-compose.prod.yml` in `/home/ubuntu/hairiq`.
-4.  **`certbot`**: Handles Let's Encrypt certificates automatically for all five subdomains (`hairiq.io`, `www`, `api`, `ai`, and `admin`).
+4.  **`certbot`**: Handles Let's Encrypt certificates automatically for all five subdomains (`hairlync.com`, `www`, `api`, `ai`, and `admin`).
 
 ---
 

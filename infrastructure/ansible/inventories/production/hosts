@@ -1,6 +1,5 @@
 [webservers]
-# Replace with your EC2 Elastic IP after terraform apply
-prod_server ansible_host=YOUR.EC2.ELASTIC.IP
+prod_server ansible_host=13.48.88.3
 
 [all:vars]
 ansible_user=ubuntu
