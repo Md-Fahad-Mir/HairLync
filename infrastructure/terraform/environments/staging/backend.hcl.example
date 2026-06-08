@@ -1,0 +1,7 @@
+# Copy to backend.hcl, set the bucket to the one bootstrap created, then:
+#   terraform init -backend-config=backend.hcl
+bucket         = "hairiq-tfstate-CHANGEME1234"
+key            = "staging/terraform.tfstate"
+region         = "eu-north-1"
+dynamodb_table = "hairiq-tflock"
+encrypt        = true

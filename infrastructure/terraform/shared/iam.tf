@@ -1,0 +1,35 @@
+# ─── EC2 Instance Profile ─────────────────────────────────────────────
+# Attaches an IAM role to the EC2 box so it can pull images from ECR using
+# temporary, auto-rotating credentials from instance metadata (IMDS) —
+# NO static AWS keys ever live on the server.
+
+data "aws_iam_policy_document" "ec2_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ec2" {
+  name               = "${var.project_name}-${var.environment}-ec2-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-ec2-role"
+    Environment = var.environment
+  }
+}
+
+# Read-only ECR: the server may pull/authenticate, but never push/delete.
+resource "aws_iam_role_policy_attachment" "ec2_ecr_read" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project_name}-${var.environment}-ec2-profile"
+  role = aws_iam_role.ec2.name
+}

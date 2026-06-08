@@ -9,10 +9,21 @@ resource "aws_key_pair" "deploy_key" {
 
 # EC2 Instance
 resource "aws_instance" "app_server" {
-  ami                    = var.ami
+  # Use an explicit AMI if provided, otherwise the latest Ubuntu 24.04 lookup.
+  ami                    = var.ami != "" ? var.ami : data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   key_name               = aws_key_pair.deploy_key.key_name
   vpc_security_group_ids = [aws_security_group.app_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
+
+  # 30 GB encrypted gp3 root volume — 8 GB default is too small for 4
+  # Docker images + build cache.
+  root_block_device {
+    volume_size           = var.root_volume_size
+    volume_type           = "gp3"
+    encrypted             = true
+    delete_on_termination = true
+  }
 
   tags = {
     Name        = "${var.project_name}-${var.environment}"
@@ -86,21 +97,28 @@ resource "aws_s3_bucket_policy" "media" {
 
 # RDS PostgreSQL
 resource "aws_db_instance" "postgres" {
-  identifier          = "${var.project_name}-${var.environment}-db"
-  engine              = "postgres"
-  engine_version      = "16"
-  instance_class      = var.db_instance_class
-  allocated_storage   = var.db_allocated_storage
-  db_name             = replace(var.project_name, "-", "")
-  username            = var.db_username
-  password            = var.db_password
-  skip_final_snapshot = var.environment == "staging" ? true : false
+  identifier        = "${var.project_name}-${var.environment}-db"
+  engine            = "postgres"
+  engine_version    = "16"
+  instance_class    = var.db_instance_class
+  allocated_storage = var.db_allocated_storage
+  db_name           = replace(var.project_name, "-", "")
+  username          = var.db_username
+  password          = var.db_password
+
+  # Encrypt data at rest (free; AWS-managed KMS key).
+  storage_encrypted = true
 
   vpc_security_group_ids = [aws_security_group.app_sg.id]
   publicly_accessible    = false # SECURITY: never expose RDS publicly
 
   backup_retention_period = var.environment == "production" ? 7 : 1
   apply_immediately       = true
+
+  # Protect production from accidental deletion; take a final snapshot.
+  deletion_protection       = var.environment == "production"
+  skip_final_snapshot       = var.environment != "production"
+  final_snapshot_identifier = var.environment == "production" ? "${var.project_name}-${var.environment}-final" : null
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-db"

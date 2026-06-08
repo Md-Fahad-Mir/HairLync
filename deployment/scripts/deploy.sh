@@ -1,7 +1,15 @@
 #!/bin/bash
 # ─── deploy.sh ────────────────────────────────────────────────────────
-# Full HairIQ deployment script: Terraform → Ansible → Docker Compose
+# BOOTSTRAP a HairIQ environment from scratch: Terraform (AWS infra) →
+# Ansible (install Docker/Nginx/SSL, ship compose + env files, first "up").
 # Usage: ./deploy.sh [production|staging]
+#
+# Division of responsibility (all paths share ONE compose invocation:
+# base + per-env override, so behaviour is identical everywhere):
+#   • Terraform        → provisions AWS infra (EC2/RDS/S3).      [this script]
+#   • Ansible          → bootstraps the server + first deploy.   [this script]
+#   • GitHub Actions   → ongoing deploys on every push to main.  (.github/workflows)
+#   • rollback.sh      → same compose, re-pinned to a prior tag.
 set -euo pipefail
 
 ENV="${1:-production}"

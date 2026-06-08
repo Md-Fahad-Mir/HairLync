@@ -5,21 +5,21 @@
 
 services:
   ai:
-    image: ${DOCKERHUB_USERNAME}/hairiq-ai:staging
+    image: ${REGISTRY}/hairiq-ai:staging
     env_file:
       - ../environments/.env.staging.ai
 
   backend:
-    image: ${DOCKERHUB_USERNAME}/hairiq-backend:staging
+    image: ${REGISTRY}/hairiq-backend:staging
     env_file:
       - ../environments/.env.staging.backend
 
   landing:
-    image: ${DOCKERHUB_USERNAME}/hairiq-landing:staging
+    image: ${REGISTRY}/hairiq-landing:staging
     env_file:
       - ../environments/.env.staging.landing
 
   admin:
-    image: ${DOCKERHUB_USERNAME}/hairiq-admin:staging
+    image: ${REGISTRY}/hairiq-admin:staging
     env_file:
       - ../environments/.env.staging.admin

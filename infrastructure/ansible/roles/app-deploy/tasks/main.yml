@@ -1,6 +1,9 @@
 ---
 # ─── Role: app-deploy ─────────────────────────────────────────────────
-# Creates project directories, copies env files, deploys docker compose.
+# Mirrors the repo's deployment/ subtree onto the server (base compose +
+# env override + per-service .env files), then brings the stack up via the
+# handler. The subtree layout means the relative paths inside the compose
+# files (e.g. ../environments/.env.production.backend) resolve correctly.
 
 - name: Create project directory
   file:
@@ -10,7 +13,7 @@
     owner: ubuntu
     group: ubuntu
 
-- name: Create service subdirectories
+- name: Create deployment subdirectories
   file:
     path: "{{ project_path }}/{{ item }}"
     state: directory
@@ -18,15 +21,31 @@
     owner: ubuntu
     group: ubuntu
   loop:
-    - backend
-    - ai
-    - landing
-    - admin
+    - "deployment/compose/{{ env }}"
+    - deployment/environments
+
+- name: Copy base docker-compose file
+  copy:
+    src: "{{ playbook_dir }}/../../../deployment/compose/docker-compose.base.yml"
+    dest: "{{ project_path }}/deployment/compose/docker-compose.base.yml"
+    mode: '0644'
+    owner: ubuntu
+    group: ubuntu
+  notify: restart docker compose
+
+- name: "Copy {{ env }} docker-compose override"
+  copy:
+    src: "{{ playbook_dir }}/../../../deployment/compose/{{ env }}/docker-compose.yml"
+    dest: "{{ project_path }}/deployment/compose/{{ env }}/docker-compose.yml"
+    mode: '0644'
+    owner: ubuntu
+    group: ubuntu
+  notify: restart docker compose
 
 - name: Copy service .env files to server
   copy:
-    src: "{{ playbook_dir }}/../../../deployment/environments/.env.production.{{ item }}"
-    dest: "{{ project_path }}/{{ item }}/.env"
+    src: "{{ playbook_dir }}/../../../deployment/environments/.env.{{ env }}.{{ item }}"
+    dest: "{{ project_path }}/deployment/environments/.env.{{ env }}.{{ item }}"
     mode: '0600'
     owner: ubuntu
     group: ubuntu
@@ -35,13 +54,4 @@
     - ai
     - landing
     - admin
-  notify: restart docker compose
-
-- name: Copy docker-compose.prod.yml to server
-  copy:
-    src: "{{ playbook_dir }}/../../../deployment/compose/production/docker-compose.yml"
-    dest: "{{ project_path }}/docker-compose.prod.yml"
-    mode: '0644'
-    owner: ubuntu
-    group: ubuntu
   notify: restart docker compose

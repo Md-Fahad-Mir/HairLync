@@ -6,35 +6,45 @@ on:
       - staging
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
+  AWS_REGION: eu-north-1
   IMAGE_TAG: staging
 
 jobs:
   build:
-    name: Build & Push Staging Images
+    name: Build & Push Staging Images to ECR
     runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.login-ecr.outputs.registry }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Build and push all services (staging tag)
         run: |
+          REGISTRY='${{ steps.login-ecr.outputs.registry }}'
           for service in backend ai landing admin; do
-            docker build \
-              -f ./deployment/services/$service/Dockerfile \
-              -t ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-$service:staging \
-              ./services/$service
-            docker push ${{ secrets.DOCKERHUB_USERNAME }}/hairiq-$service:staging
+            docker build -f ./services/$service/Dockerfile \
+              -t "$REGISTRY/hairiq-$service:staging" ./services/$service
+            docker push "$REGISTRY/hairiq-$service:staging"
           done
 
   deploy:
@@ -51,9 +61,19 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            set -e
+            set -euo pipefail
             cd /home/ubuntu/hairiq
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
-            docker compose -f docker-compose.prod.yml exec -T backend \
-              python manage.py migrate --noinput --fake-initial
+            export PATH=$PATH:/usr/local/bin
+            export REGISTRY='${{ needs.build.outputs.registry }}'
+            export IMAGE_TAG='staging'
+
+            aws ecr get-login-password --region eu-north-1 \
+              | docker login --username AWS --password-stdin "$REGISTRY"
+
+            COMPOSE="docker compose \
+              -f deployment/compose/docker-compose.base.yml \
+              -f deployment/compose/staging/docker-compose.yml"
+
+            $COMPOSE pull
+            $COMPOSE up -d --force-recreate --remove-orphans
+            $COMPOSE exec -T backend python manage.py migrate --noinput

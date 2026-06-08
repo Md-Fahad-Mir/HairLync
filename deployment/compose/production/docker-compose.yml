@@ -5,22 +5,22 @@
 
 services:
   ai:
-    image: ${DOCKERHUB_USERNAME}/hairiq-ai:${IMAGE_TAG:-latest}
+    image: ${REGISTRY}/hairiq-ai:${IMAGE_TAG:-latest}
     env_file:
       - ../environments/.env.production.ai
 
   backend:
-    image: ${DOCKERHUB_USERNAME}/hairiq-backend:${IMAGE_TAG:-latest}
+    image: ${REGISTRY}/hairiq-backend:${IMAGE_TAG:-latest}
     env_file:
       - ../environments/.env.production.backend
     restart: always
 
   landing:
-    image: ${DOCKERHUB_USERNAME}/hairiq-landing:${IMAGE_TAG:-latest}
+    image: ${REGISTRY}/hairiq-landing:${IMAGE_TAG:-latest}
     env_file:
       - ../environments/.env.production.landing
 
   admin:
-    image: ${DOCKERHUB_USERNAME}/hairiq-admin:${IMAGE_TAG:-latest}
+    image: ${REGISTRY}/hairiq-admin:${IMAGE_TAG:-latest}
     env_file:
       - ../environments/.env.production.admin

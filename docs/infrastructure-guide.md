@@ -9,10 +9,10 @@ Internet
 [Elastic IP] ──► [EC2 t3.medium]
                       │
                    [Nginx]
-                    ├── :80/:443 hairiq.io       → :3000 landing
-                    ├── :80/:443 api.hairiq.io   → :8000 backend
-                    ├── :80/:443 ai.hairiq.io    → :8001 ai
-                    └── :80/:443 admin.hairiq.io → :3001 admin
+                    ├── :80/:443 hairlync.com       → :3000 landing
+                    ├── :80/:443 api.hairlync.com   → :8000 backend
+                    ├── :80/:443 ai.hairlync.com    → :8001 ai
+                    └── :80/:443 admin.hairlync.com → :3001 admin
                       │
                  [Docker Compose]
                   ├── hairiq-backend   (Django 6 + Gunicorn + ASGI)

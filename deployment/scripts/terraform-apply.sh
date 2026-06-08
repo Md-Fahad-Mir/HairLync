@@ -15,7 +15,12 @@ fi
 
 echo "▶ Terraform Init ($ENV)"
 cd "$TF_DIR"
-terraform init
+if [[ ! -f backend.hcl ]]; then
+  echo "Error: backend.hcl not found in $TF_DIR"
+  echo "       Copy backend.hcl.example → backend.hcl and set your state bucket first."
+  exit 1
+fi
+terraform init -backend-config=backend.hcl
 
 echo "▶ Terraform Validate"
 terraform validate

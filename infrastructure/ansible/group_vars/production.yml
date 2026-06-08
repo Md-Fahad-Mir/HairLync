@@ -1,4 +1,4 @@
 # ─── HairIQ Production Overrides ──────────────────────────────────────
 env: production
-website_domain: "hairiq.io"
+website_domain: "hairlync.com"
 certbot_email: "hairlyncapp@gmail.com"

@@ -1,0 +1,27 @@
+# Virtualenvs & Python caches (image installs its own deps)
+.venv
+venv
+ENV
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+
+# Secrets — never bake these into an image
+.env
+.env.*
+
+# Local runtime data (provided by volumes at runtime, not the image)
+media
+staticfiles
+db.sqlite3
+db.sqlite3-journal
+reports
+
+# VCS / tooling / docs
+.git
+.gitignore
+.dockerignore
+README.md
+*.log
+.DS_Store

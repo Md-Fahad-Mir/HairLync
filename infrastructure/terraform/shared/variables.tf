@@ -34,14 +34,21 @@ variable "instance_type" {
 }
 
 variable "ami" {
-  description = "Ubuntu AMI ID for the target region"
+  description = "Optional explicit AMI ID. Leave empty to auto-select the latest Ubuntu 24.04 LTS via the aws_ami data source."
   type        = string
+  default     = ""
 }
 
 variable "public_key_path" {
   description = "Path to SSH public key"
   type        = string
   default     = "~/.ssh/id_rsa.pub"
+}
+
+variable "root_volume_size" {
+  description = "EC2 root EBS volume size in GB"
+  type        = number
+  default     = 30
 }
 
 # ─── Database ─────────────────────────────────────────────────────────
@@ -89,5 +96,5 @@ variable "allowed_ssh_cidrs" {
 variable "domain" {
   description = "Primary domain name"
   type        = string
-  default     = "hairiq.io"
+  default     = "hairlync.com"
 }

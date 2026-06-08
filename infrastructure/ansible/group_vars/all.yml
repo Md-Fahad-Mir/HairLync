@@ -3,11 +3,22 @@
 
 project_name: "{{ lookup('env', 'PROJECT_NAME') | default('hairiq') }}"
 project_path: "/home/ubuntu/{{ project_name }}"
-website_domain: "hairiq.io"
+website_domain: "hairlync.com"
 certbot_email: "hairlyncapp@gmail.com"
 
-# Docker Compose file on the remote server
-docker_compose_file: "{{ project_path }}/docker-compose.prod.yml"
+# Docker Compose files on the remote server. The server mirrors the repo's
+# deployment/ subtree, so the SAME base + env-override command that runs
+# locally (make up-prod) also runs here — keeping ports, networks, volumes
+# and healthchecks (defined in the base file) intact.
+compose_base:     "{{ project_path }}/deployment/compose/docker-compose.base.yml"
+compose_override: "{{ project_path }}/deployment/compose/{{ env }}/docker-compose.yml"
+
+# ECR registry + tag for ${REGISTRY}/<svc>:${IMAGE_TAG} interpolation in the
+# compose files. Pass at deploy time, e.g.:
+#   REGISTRY=<acct>.dkr.ecr.eu-north-1.amazonaws.com IMAGE_TAG=<sha> make ansible-prod
+ecr_registry: "{{ lookup('env', 'REGISTRY') | default('', true) }}"
+image_tag:    "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
+aws_region:   "{{ lookup('env', 'AWS_REGION') | default('eu-north-1', true) }}"
 
 # Nginx config name
 nginx_site_name: "hairiq"

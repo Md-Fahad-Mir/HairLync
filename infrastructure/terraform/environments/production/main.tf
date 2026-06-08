@@ -1,5 +1,6 @@
 # ─── HairIQ Production Environment ────────────────────────────────────
-# Usage: cd here, then terraform init -backend-config=backend.hcl
+# Init:  terraform init -backend-config=backend.hcl
+# Apply: terraform apply   (secrets come from terraform.tfvars / TF_VAR_*)
 
 module "infra" {
   source = "../../shared"
@@ -8,14 +9,13 @@ module "infra" {
   environment  = "production"
   region       = "eu-north-1"
   aws_profile  = "default"
-  domain       = "hairiq.io"
+  domain       = "hairlync.com"
 
-  # Compute
+  # Compute — `ami` left unset → latest Ubuntu 24.04 LTS auto-selected.
   instance_type   = "t3.medium"
-  ami             = "ami-XXXXXXXXXXXXXXXXX" # Ubuntu 24.04 LTS for your region
-  public_key_path = "~/.ssh/id_rsa.pub"
+  public_key_path = var.public_key_path
 
-  # Database (use terraform.tfvars or TF_VAR_ env vars for secrets)
+  # Database
   db_username          = var.db_username
   db_password          = var.db_password
   db_instance_class    = "db.t3.micro"
@@ -24,11 +24,11 @@ module "infra" {
   # Storage
   bucket_name = "hairiq-media-prod"
 
-  # Networking
-  allowed_ssh_cidrs = ["YOUR.PUBLIC.IP/32"] # Replace with your IP
+  # Networking — your IP(s), provided via terraform.tfvars (never committed)
+  allowed_ssh_cidrs = var.allowed_ssh_cidrs
 }
 
-# Pass-through variables for secrets
+# ─── Secrets / per-operator values (set in terraform.tfvars) ──────────
 variable "db_username" {
   type      = string
   sensitive = true
@@ -39,6 +39,18 @@ variable "db_password" {
   sensitive = true
 }
 
+variable "allowed_ssh_cidrs" {
+  description = "CIDRs allowed to SSH, e.g. [\"1.2.3.4/32\"]"
+  type        = list(string)
+}
+
+variable "public_key_path" {
+  description = "Path to your SSH public key"
+  type        = string
+  default     = "~/.ssh/id_rsa.pub"
+}
+
+# ─── Outputs ──────────────────────────────────────────────────────────
 output "server_ip" {
   value = module.infra.ec2_public_ip
 }

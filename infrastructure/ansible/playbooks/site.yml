@@ -7,6 +7,10 @@
 
   roles:
     - role: docker
+      tags: [base, docker]
     - role: nginx
+      tags: [base, nginx]
     - role: app-deploy
+      tags: [app]
     - role: certbot
+      tags: [ssl]
