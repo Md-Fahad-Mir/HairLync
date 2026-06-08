@@ -9,9 +9,15 @@ variable "github_repo" {
 }
 
 variable "github_branches" {
-  description = "Branches allowed to assume the CI role"
+  description = "Branches allowed to assume the CI role (used by build jobs)"
   type        = list(string)
   default     = ["main", "staging"]
+}
+
+variable "github_environments" {
+  description = "GitHub environments allowed to assume the CI role (deploy jobs that set `environment:` get an environment-scoped OIDC subject)"
+  type        = list(string)
+  default     = ["production", "staging"]
 }
 
 # Fetch GitHub's OIDC TLS thumbprint dynamically (self-updating).
@@ -43,11 +49,15 @@ data "aws_iam_policy_document" "ci_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Subject must be this repo on an allowed branch (least privilege).
+    # Subject must be this repo on an allowed branch (build jobs) OR an
+    # allowed environment (deploy jobs that set `environment:`).
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for b in var.github_branches : "repo:${var.github_repo}:ref:refs/heads/${b}"]
+      values = concat(
+        [for b in var.github_branches : "repo:${var.github_repo}:ref:refs/heads/${b}"],
+        [for e in var.github_environments : "repo:${var.github_repo}:environment:${e}"]
+      )
     }
   }
 }
