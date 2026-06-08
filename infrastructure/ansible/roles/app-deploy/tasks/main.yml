@@ -55,3 +55,11 @@
     - landing
     - admin
   notify: restart docker compose
+
+- name: Copy on-box deploy script (invoked by CI via SSM)
+  copy:
+    src: "{{ playbook_dir }}/../../../deployment/scripts/server-deploy.sh"
+    dest: "{{ project_path }}/server-deploy.sh"
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu

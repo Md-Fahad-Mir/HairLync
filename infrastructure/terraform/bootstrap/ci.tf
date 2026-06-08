@@ -83,6 +83,21 @@ data "aws_iam_policy_document" "ci_ecr_push" {
     ]
     resources = [for repo in aws_ecr_repository.service : repo.arn]
   }
+
+  # Deploy by sending a command to the instance via SSM (no inbound SSH).
+  # Broad resources here are acceptable for a deploy identity that only
+  # main/staging pushes can assume; tighten with tag conditions in Stage 10.
+  statement {
+    sid       = "SSMDeploy"
+    actions   = ["ssm:SendCommand", "ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "EC2Describe"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role_policy" "ci_ecr_push" {

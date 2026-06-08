@@ -1,7 +1,7 @@
 # ─── HairIQ Global Variables ──────────────────────────────────────────
 # Values shared across all environments. Override in <env>.yml files.
 
-project_name: "{{ lookup('env', 'PROJECT_NAME') | default('hairiq') }}"
+project_name: "{{ lookup('env', 'PROJECT_NAME') | default('hairiq', true) }}"
 project_path: "/home/ubuntu/{{ project_name }}"
 website_domain: "hairlync.com"
 certbot_email: "hairlyncapp@gmail.com"
