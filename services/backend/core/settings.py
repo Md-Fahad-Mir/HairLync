@@ -72,6 +72,9 @@ INSTALLED_APPS = [
 #=====================================================================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serve collected static files (DRF/Swagger UI assets) under gunicorn with
+    # DEBUG=False. Must sit right after SecurityMiddleware.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

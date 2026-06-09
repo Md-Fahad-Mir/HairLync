@@ -12,7 +12,7 @@ COPY pyproject.toml uv.lock ./
 # Export requirements and install dependencies
 RUN uv export --no-dev --frozen > requirements.txt && \
     pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir gunicorn==22.0.0 uvicorn[standard]==0.30.0 psycopg2-binary>=2.9.10
+    pip install --no-cache-dir gunicorn==22.0.0 uvicorn[standard]==0.30.0 psycopg2-binary>=2.9.10 whitenoise>=6.6.0
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────
 FROM python:3.13-slim-bookworm
