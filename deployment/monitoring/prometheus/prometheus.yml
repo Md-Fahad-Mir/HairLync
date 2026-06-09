@@ -11,19 +11,26 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Node exporter (EC2 system metrics)
+  # Host metrics: CPU, memory, disk, network, load (resolved over monitoring-net)
   - job_name: 'node'
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ['node-exporter:9100']
 
-  # Django backend (requires django-prometheus)
-  - job_name: 'hairiq-backend'
+  # Per-container metrics: CPU, memory, network, restarts per container
+  - job_name: 'cadvisor'
     static_configs:
-      - targets: ['localhost:8000']
-    metrics_path: /metrics
+      - targets: ['cadvisor:8080']
 
-  # FastAPI AI service (Hair Analysis)
-  - job_name: 'hairiq-ai'
-    static_configs:
-      - targets: ['localhost:8001']
-    metrics_path: /metrics
+  # ── App metrics — ENABLE after instrumenting the apps ───────────────
+  # backend: add `django-prometheus` (INSTALLED_APPS + MIDDLEWARE + /metrics url)
+  # ai:      add `prometheus-fastapi-instrumentator`
+  # The apps publish their ports on the host, so scrape via the docker
+  # host gateway (Prometheus has extra_hosts: host.docker.internal).
+  # - job_name: 'hairiq-backend'
+  #   metrics_path: /metrics
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8000']
+  # - job_name: 'hairiq-ai'
+  #   metrics_path: /metrics
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8001']

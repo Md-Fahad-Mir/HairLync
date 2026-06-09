@@ -14,3 +14,5 @@
       tags: [app]
     - role: certbot
       tags: [ssl]
+    - role: monitoring
+      tags: [monitoring]

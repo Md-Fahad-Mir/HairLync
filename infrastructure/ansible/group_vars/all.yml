@@ -20,6 +20,9 @@ ecr_registry: "{{ lookup('env', 'REGISTRY') | default('', true) }}"
 image_tag:    "{{ lookup('env', 'IMAGE_TAG') | default('latest', true) }}"
 aws_region:   "{{ lookup('env', 'AWS_REGION') | default('eu-north-1', true) }}"
 
+# Grafana admin password — pass at deploy time: GRAFANA_PASSWORD=... make ...
+grafana_password: "{{ lookup('env', 'GRAFANA_PASSWORD') | default('', true) }}"
+
 # Nginx config name
 nginx_site_name: "hairiq"
 

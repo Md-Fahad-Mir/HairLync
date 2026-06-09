@@ -1,0 +1,35 @@
+---
+# ─── Role: monitoring ─────────────────────────────────────────────────
+# Deploys Prometheus + Grafana + node-exporter + cAdvisor + Loki/Promtail
+# alongside the app. UIs bind to 127.0.0.1 only (reach Grafana via SSH tunnel:
+#   ssh -L 3100:localhost:3100 ubuntu@<server> ).
+
+- name: Create monitoring directory
+  file:
+    path: "{{ project_path }}/deployment/monitoring"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy monitoring stack files
+  copy:
+    src: "{{ playbook_dir }}/../../../deployment/monitoring/"
+    dest: "{{ project_path }}/deployment/monitoring/"
+    owner: ubuntu
+    group: ubuntu
+    mode: preserve
+
+- name: Write monitoring .env (Grafana admin password)
+  copy:
+    dest: "{{ project_path }}/deployment/monitoring/.env"
+    content: "GRAFANA_PASSWORD={{ grafana_password }}\n"
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Bring up the monitoring stack
+  shell: docker compose -f docker-compose.monitoring.yml up -d --force-recreate --remove-orphans
+  args:
+    chdir: "{{ project_path }}/deployment/monitoring"
+  become_user: ubuntu
