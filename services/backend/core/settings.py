@@ -271,6 +271,14 @@ CORS_ALLOWED_ORIGINS = os.environ.get(
 ).split(',')
 
 #=====================================================================
+# CSRF Settings
+#=====================================================================
+CSRF_TRUSTED_ORIGINS = os.environ.get(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://api.hairlync.com,https://hairlync.com,https://admin.hairlync.com,http://localhost:8000,http://127.0.0.1:8000'
+).split(',')
+
+#=====================================================================
 # Email Settings (Console backend for development)
 #=====================================================================
 EMAIL_BACKEND = os.environ.get(
