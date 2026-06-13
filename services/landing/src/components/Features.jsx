@@ -75,7 +75,7 @@ const Features = () => {
             p-3 md:p-4 shadow-[0_3px_6px_0px_rgba(0,0,0,0.16)]
             w-full max-w-[270px] text-center text-[#383838] text-sm  leading-relaxed transform hover:-translate-y-2 transition-all duration-400 ease-out"
           >
-            Choose your journey. Whether client or professional, Hiar adapts
+            Choose your journey. Whether client or professional, Hair adapts
             with a tailored, smart onboarding experience.
           </motion.div>
 
