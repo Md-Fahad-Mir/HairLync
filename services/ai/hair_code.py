@@ -144,22 +144,25 @@ SCHEMA = """
 """.strip()
 
 
-def build_user_prompt(gender: str, hair_length: str) -> str:
+def build_user_prompt(gender: str, hair_length: str, occasion: str) -> str:
     return (
-        f"User input — Gender: {gender}, Hair length: {hair_length}.\n"
+        f"User input — Gender: {gender}, Hair length: {hair_length}, Occasion: {occasion}.\n"
         f"Treat HAIR analysis as highest priority and recommend AT LEAST 3 hairstyles "
         f"tailored to face shape, hair texture, density, skin tone & undertone, "
+        f"and prioritize hairstyle options suitable for the selected occasion ({occasion}). "
         f"using golden-ratio principles and color harmony.\n\n"
         f"Return ONLY this JSON schema:\n{SCHEMA}"
     )
 
 
-def build_tutorial_query(topic: str, gender: str = "", hair_length: str = "") -> str:
+def build_tutorial_query(topic: str, gender: str = "", hair_length: str = "", occasion: str = "") -> str:
     parts = [topic.strip(), "tutorial"]
     if gender.strip():
         parts.append(gender.strip())
     if hair_length.strip():
         parts.append(hair_length.strip())
+    if occasion.strip():
+        parts.append(occasion.strip())
     return " ".join(part for part in parts if part)
 
 
@@ -234,6 +237,7 @@ def enrich_analysis_with_tutorials(data: dict) -> dict:
     meta = data.get("_meta") or {}
     gender = str(meta.get("gender") or "").strip()
     hair_length = str(meta.get("hair_length") or "").strip()
+    occasion = str(meta.get("occasion") or "").strip()
     hair_analysis = data.get("hair_analysis") or {}
     texture = str(hair_analysis.get("texture_classification") or "").strip()
     density = str(hair_analysis.get("density") or "").strip()
@@ -244,14 +248,14 @@ def enrich_analysis_with_tutorials(data: dict) -> dict:
         style_name = str(hairstyle.get("name") or "").strip()
         if not style_name:
             continue
-        query = build_tutorial_query(f"{style_name} hairstyle", gender, hair_length)
+        query = build_tutorial_query(f"{style_name} hairstyle", gender, hair_length, occasion)
         hairstyle["tutorials"] = fetch_youtube_tutorials(query)
 
     hair_care = recommendations.get("hair_care")
     if isinstance(hair_care, dict):
-        care_bits = [part for part in [texture, density, gender, hair_length] if part]
+        care_bits = [part for part in [texture, density, gender, hair_length, occasion] if part]
         if care_bits:
-            query = build_tutorial_query(f"hair care for {' '.join(care_bits)}")
+            query = build_tutorial_query(f"hair care for {' '.join(care_bits)}", occasion=occasion)
             hair_care["tutorials"] = fetch_youtube_tutorials(query)
 
     for beard in recommendations.get("beard_recommendations") or []:
@@ -260,7 +264,7 @@ def enrich_analysis_with_tutorials(data: dict) -> dict:
         beard_style = str(beard.get("style") or "").strip()
         if not beard_style:
             continue
-        query = build_tutorial_query(f"{beard_style} beard", gender, hair_length)
+        query = build_tutorial_query(f"{beard_style} beard", gender, hair_length, occasion)
         beard["tutorials"] = fetch_youtube_tutorials(query)
 
     return data
@@ -306,7 +310,7 @@ def get_best_available_model(client: OpenAI, preferred_model: str) -> str:
         return preferred_model
 
 
-def analyze(image_path: Path, gender: str, hair_length: str) -> dict:
+def analyze(image_path: Path, gender: str, hair_length: str, occasion: str) -> dict:
     if not API_KEY:
         raise RuntimeError("OPENAI_API_KEY not set in environment.")
     if not image_path.exists():
@@ -327,7 +331,7 @@ def analyze(image_path: Path, gender: str, hair_length: str) -> dict:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": build_user_prompt(gender, hair_length)},
+                    {"type": "text", "text": build_user_prompt(gender, hair_length, occasion)},
                     {
                         "type": "image_url",
                         "image_url": {
@@ -364,6 +368,7 @@ def analyze(image_path: Path, gender: str, hair_length: str) -> dict:
         "image_path": str(image_path),
         "gender": gender,
         "hair_length": hair_length,
+        "occasion": occasion,
         "tokens_used": response.usage.total_tokens if response.usage else None,
     }
     return data
@@ -389,7 +394,8 @@ def to_markdown(data: dict) -> str:
     out.append(f"\n_Generated: {datetime.now():%Y-%m-%d %H:%M:%S}_\n")
     out.append(f"**Image:** `{s(meta.get('image_path'))}`  ")
     out.append(f"**Gender:** {s(meta.get('gender'))}  |  "
-               f"**Hair length:** {s(meta.get('hair_length'))}  ")
+               f"**Hair length:** {s(meta.get('hair_length'))}  |  "
+               f"**Occasion:** {s(meta.get('occasion'))}  ")
     out.append(f"**Model:** `{s(meta.get('model'))}`\n")
 
     if data.get("summary"):
@@ -650,20 +656,30 @@ def main() -> None:
     
     # Get hair length
     if len(sys.argv) > 3:
-        hair_length = sys.argv[3].lower()
+        hair_length = sys.argv[3].strip().lower().replace(" ", "_")
     else:
         while True:
-            hair_length = input("Enter hair length (short/medium/long): ").strip().lower()
-            if hair_length in {"short", "medium", "long"}:
+            hair_length = input("Enter hair length (short/medium/long/extra_long): ").strip().lower().replace(" ", "_")
+            if hair_length in {"short", "medium", "long", "extra_long"}:
                 break
-            print("Error: Please enter 'short', 'medium', or 'long'")
+            print("Error: Please enter 'short', 'medium', 'long', or 'extra_long'")
+
+    # Get occasion
+    if len(sys.argv) > 4:
+        occasion = sys.argv[4].strip().lower()
+    else:
+        while True:
+            occasion = input("Enter occasion (casual/formal/party/wedding/work): ").strip().lower()
+            if occasion in {"casual", "formal", "party", "wedding", "work"}:
+                break
+            print("Error: Please enter 'casual', 'formal', 'party', 'wedding', or 'work'")
     
     print()
     print("-" * 60)
 
     print(f"Analyzing {image_path.name} ...")
     try:
-        data = enrich_analysis_with_tutorials(analyze(image_path, gender, hair_length))
+        data = enrich_analysis_with_tutorials(analyze(image_path, gender, hair_length, occasion))
     except Exception as e:
         print(f"Failed: {e}")
         sys.exit(2)
