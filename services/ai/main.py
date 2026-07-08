@@ -10,7 +10,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from hair_code import analyze, enrich_analysis_with_tutorials, save_results
+from hair_code import analyze, enrich_analysis_with_tutorials
 
 
 logger = logging.getLogger("main")
@@ -134,8 +134,8 @@ def swagger_json() -> dict[str, Any]:
 async def analyze_image(
     image: UploadFile = File(...),
     gender: Literal["male", "female"] = Form(...),
-    hair_length: Literal["short", "medium", "long"] = Form(...),
-    save_report: bool = Form(False),
+    hair_length: Literal["short", "medium", "long", "extra long"] = Form(...),
+    occasion: Literal["casual", "formal", "party", "wedding", "work"] = Form(...),
 ) -> dict[str, Any]:
     suffix = _guess_suffix(image)
     if not suffix:
@@ -150,7 +150,8 @@ async def analyze_image(
             temp_path = Path(temp_file.name)
             temp_file.write(await image.read())
 
-        result = enrich_analysis_with_tutorials(analyze(temp_path, gender, hair_length))
+        normalized_hair_length = hair_length.replace(" ", "_")
+        result = enrich_analysis_with_tutorials(analyze(temp_path, gender, normalized_hair_length, occasion))
         response: dict[str, Any] = {
             "analysis": result,
             "meta": {
@@ -158,16 +159,9 @@ async def analyze_image(
                 "content_type": image.content_type,
                 "gender": gender,
                 "hair_length": hair_length,
-                "saved_report": False,
+                "occasion": occasion,
             },
         }
-
-        if save_report:
-            report_name = Path(image.filename or "upload").stem or "upload"
-            json_path, md_path = save_results(result, report_name)
-            response["meta"]["saved_report"] = True
-            response["meta"]["json_report"] = str(json_path)
-            response["meta"]["markdown_report"] = str(md_path)
 
         return response
 
