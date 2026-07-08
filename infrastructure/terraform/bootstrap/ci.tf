@@ -5,7 +5,7 @@
 variable "github_repo" {
   description = "owner/repo allowed to assume the CI role"
   type        = string
-  default     = "Md-Fahad-Mir/HairIQ"
+  default     = "Md-Fahad-Mir/HairLync"
 }
 
 variable "github_branches" {
