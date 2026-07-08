@@ -84,6 +84,7 @@ data "aws_iam_policy_document" "ci_ecr_push" {
     sid = "ECRPushPull"
     actions = [
       "ecr:BatchCheckLayerAvailability",
+      "ecr:DescribeRepositories",
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
