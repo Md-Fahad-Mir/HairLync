@@ -39,7 +39,22 @@ mkdir -p /app/media /app/staticfiles
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
 
-# 5. Create superuser only if credentials are provided
+# 5. Copy existing local media to S3 when S3 media storage is enabled
+case "${USE_S3:-}" in
+  1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+    case "${SYNC_MEDIA_TO_S3_ON_START:-True}" in
+      0|false|False|FALSE|no|No|NO|off|Off|OFF)
+        echo "Skipping media sync to S3."
+        ;;
+      *)
+        echo "Syncing existing media files to configured storage..."
+        python manage.py sync_media_to_storage --noinput
+        ;;
+    esac
+    ;;
+esac
+
+# 6. Create superuser only if credentials are provided
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
   echo "Creating superuser..."
   python manage.py createsuperuser --noinput || echo "Superuser already exists or creation failed"
@@ -49,6 +64,6 @@ fi
 
 echo "HairIQ Backend entrypoint completed successfully!"
 
-# 6. Execute the CMD from Dockerfile
+# 7. Execute the CMD from Dockerfile
 echo "Starting server..."
 exec "$@"

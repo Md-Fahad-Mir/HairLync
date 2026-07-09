@@ -4,12 +4,27 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / '.env', override=True)
+
+
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def env_str(name, default=''):
+    return os.environ.get(name, default).strip()
+
+
+USE_S3 = env_bool('USE_S3', False)
 
 #=====================================================================
 # SECRET KEY SETTINGS
@@ -23,7 +38,7 @@ SECRET_KEY = os.environ.get(
 #=====================================================================
 # DEBUG SETTINGS
 #=====================================================================
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
+DEBUG = env_bool('DJANGO_DEBUG', True)
 
 
 #=====================================================================
@@ -51,6 +66,9 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_yasg',
     'corsheaders',
+
+    # S3 media storage
+    'storages',
 
     # Local apps
     'Apps.users',
@@ -175,6 +193,54 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 #=====================================================================
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+#=====================================================================
+# File Storage Settings
+#=====================================================================
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
+
+if USE_S3:
+    AWS_STORAGE_BUCKET_NAME = env_str('AWS_STORAGE_BUCKET_NAME')
+    if not AWS_STORAGE_BUCKET_NAME:
+        raise ImproperlyConfigured('USE_S3=True requires AWS_STORAGE_BUCKET_NAME.')
+
+    AWS_S3_REGION_NAME = env_str('AWS_S3_REGION_NAME', env_str('AWS_REGION', 'eu-north-1'))
+    AWS_S3_CUSTOM_DOMAIN = env_str('AWS_S3_CUSTOM_DOMAIN')
+    AWS_LOCATION = env_str('AWS_LOCATION', 'media').strip('/')
+    AWS_QUERYSTRING_AUTH = env_bool('AWS_QUERYSTRING_AUTH', False)
+    AWS_S3_FILE_OVERWRITE = env_bool('AWS_S3_FILE_OVERWRITE', False)
+    AWS_DEFAULT_ACL = None
+    AWS_S3_SIGNATURE_VERSION = env_str('AWS_S3_SIGNATURE_VERSION', 's3v4')
+    AWS_S3_ADDRESSING_STYLE = env_str('AWS_S3_ADDRESSING_STYLE', 'virtual')
+    AWS_S3_ENDPOINT_URL = env_str('AWS_S3_ENDPOINT_URL') or None
+    AWS_S3_VERIFY = env_bool('AWS_S3_VERIFY', True)
+
+    AWS_ACCESS_KEY_ID = env_str('AWS_ACCESS_KEY_ID') or None
+    AWS_SECRET_ACCESS_KEY = env_str('AWS_SECRET_ACCESS_KEY') or None
+    AWS_SESSION_TOKEN = env_str('AWS_SESSION_TOKEN') or None
+
+    cache_control = env_str('AWS_S3_CACHE_CONTROL', 'max-age=86400')
+    AWS_S3_OBJECT_PARAMETERS = {}
+    if cache_control:
+        AWS_S3_OBJECT_PARAMETERS['CacheControl'] = cache_control
+
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.s3.S3Storage',
+    }
+
+    if AWS_S3_CUSTOM_DOMAIN:
+        MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/'
+    elif AWS_S3_REGION_NAME:
+        MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/{AWS_LOCATION}/'
+    else:
+        MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/{AWS_LOCATION}/'
 
 #=====================================================================
 # Default Auto Field
