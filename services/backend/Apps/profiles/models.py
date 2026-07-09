@@ -1,21 +1,8 @@
 from django.db import models
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 import random
 import string
-
-
-def profile_service_image_upload_path(instance, filename):
-    if instance.barber_id:
-        owner_path = f'barbers/{instance.barber_id}'
-    elif instance.salon_id:
-        owner_path = f'salons/{instance.salon_id}'
-    elif instance.employee_id:
-        owner_path = f'employees/{instance.employee_id}'
-    else:
-        owner_path = 'unassigned'
-    return f'profiles/services/{owner_path}/{filename}'
 
 
 # ------------------------------------------------------------------------------
@@ -401,83 +388,3 @@ class SalonEmployee(models.Model):
         password_chars = uppercase + [special] + digits
         random.shuffle(password_chars)
         return ''.join(password_chars)
-
-
-# ------------------------------------------------------------------------------
-# SERVICE MANAGEMENT
-# ------------------------------------------------------------------------------
-class ProfileService(models.Model):
-    """Service management item for barber, salon, or salon employee profiles."""
-
-    class Meta:
-        verbose_name = 'Service Management'
-        verbose_name_plural = 'Service Management'
-        ordering = ['service_name']
-        constraints = [
-            models.CheckConstraint(
-                name='profiles_service_one_owner',
-                condition=(
-                    models.Q(barber__isnull=False, salon__isnull=True, employee__isnull=True) |
-                    models.Q(barber__isnull=True, salon__isnull=False, employee__isnull=True) |
-                    models.Q(barber__isnull=True, salon__isnull=True, employee__isnull=False)
-                ),
-            ),
-            models.UniqueConstraint(
-                fields=['barber', 'service_name'],
-                condition=models.Q(barber__isnull=False),
-                name='unique_barber_profile_service',
-            ),
-            models.UniqueConstraint(
-                fields=['salon', 'service_name'],
-                condition=models.Q(salon__isnull=False),
-                name='unique_salon_profile_service',
-            ),
-            models.UniqueConstraint(
-                fields=['employee', 'service_name'],
-                condition=models.Q(employee__isnull=False),
-                name='unique_employee_profile_service',
-            ),
-        ]
-
-    barber = models.ForeignKey(
-        BarberProfile,
-        on_delete=models.CASCADE,
-        related_name='profile_services',
-        blank=True,
-        null=True,
-    )
-    salon = models.ForeignKey(
-        SalonProfile,
-        on_delete=models.CASCADE,
-        related_name='profile_services',
-        blank=True,
-        null=True,
-    )
-    employee = models.ForeignKey(
-        SalonEmployee,
-        on_delete=models.CASCADE,
-        related_name='profile_services',
-        blank=True,
-        null=True,
-    )
-    service_name = models.CharField(max_length=200)
-    price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-    )
-    duration_minutes = models.PositiveIntegerField(default=0, help_text='Duration in minutes')
-    image = models.ImageField(upload_to=profile_service_image_upload_path, blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def clean(self):
-        owners = [self.barber_id, self.salon_id, self.employee_id]
-        if sum(owner is not None for owner in owners) != 1:
-            raise ValidationError('Select exactly one service owner.')
-
-    def __str__(self):
-        return self.service_name
-
