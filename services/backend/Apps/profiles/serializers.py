@@ -1,6 +1,20 @@
 from rest_framework import serializers
-from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee
+from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee, ProfileService
 from Apps.users.serializers import UserSerializer
+
+
+
+# ==============================================================================
+# SERVICE MANAGEMENT SERIALIZERS
+# ==============================================================================
+class ProfileServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProfileService
+        fields = [
+            'id', 'service_name', 'price', 'duration_minutes', 'image',
+            'is_active', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 # ==============================================================================
@@ -27,6 +41,7 @@ class ClientProfileUpdateSerializer(serializers.ModelSerializer):
 class BarberProfileSerializer(serializers.ModelSerializer):
     """Full read serializer for barber profile."""
     user = UserSerializer(read_only=True)
+    services = serializers.SerializerMethodField()
     services_count = serializers.SerializerMethodField()
     portfolio_count = serializers.SerializerMethodField()
     gallery_images = serializers.SerializerMethodField()
@@ -39,8 +54,12 @@ class BarberProfileSerializer(serializers.ModelSerializer):
             'is_verified', 'verification_badge', 'created_at', 'updated_at',
         ]
 
+    def get_services(self, obj):
+        services = obj.profile_services.filter(is_active=True)
+        return ProfileServiceSerializer(services, many=True, context=self.context).data
+
     def get_services_count(self, obj):
-        return obj.services.filter(is_active=True).count()
+        return obj.profile_services.filter(is_active=True).count()
 
     def get_portfolio_count(self, obj):
         return obj.portfolio_items.count()
@@ -79,6 +98,7 @@ class SalonProfileSerializer(serializers.ModelSerializer):
     """Full read serializer for salon profile."""
     user = UserSerializer(read_only=True)
     employees_count = serializers.SerializerMethodField()
+    services = serializers.SerializerMethodField()
     services_count = serializers.SerializerMethodField()
     portfolio_count = serializers.SerializerMethodField()
     gallery_images = serializers.SerializerMethodField()
@@ -94,12 +114,12 @@ class SalonProfileSerializer(serializers.ModelSerializer):
     def get_employees_count(self, obj):
         return obj.employees.filter(is_active=True).count()
 
+    def get_services(self, obj):
+        services = obj.profile_services.filter(is_active=True)
+        return ProfileServiceSerializer(services, many=True, context=self.context).data
+
     def get_services_count(self, obj):
-        # Services will be linked to the salon via the barber FK
-        # For now return 0 until service model is updated
-        if hasattr(obj, 'services'):
-            return obj.services.filter(is_active=True).count()
-        return 0
+        return obj.profile_services.filter(is_active=True).count()
 
     def get_portfolio_count(self, obj):
         if hasattr(obj, 'portfolio_items'):
@@ -143,6 +163,7 @@ class SalonProfileListSerializer(serializers.ModelSerializer):
 class SalonEmployeeSerializer(serializers.ModelSerializer):
     """Read serializer for salon employees - includes generated credentials."""
     user = UserSerializer(read_only=True)
+    services = serializers.SerializerMethodField()
 
     class Meta:
         model = SalonEmployee
@@ -153,6 +174,10 @@ class SalonEmployeeSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
 
+    def get_services(self, obj):
+        services = obj.profile_services.filter(is_active=True)
+        return ProfileServiceSerializer(services, many=True, context=self.context).data
+
 
 class SalonEmployeePublicSerializer(serializers.ModelSerializer):
     """
@@ -160,6 +185,7 @@ class SalonEmployeePublicSerializer(serializers.ModelSerializer):
     Does NOT expose generated credentials.
     """
     user_name = serializers.CharField(source='user.full_name', read_only=True)
+    services = serializers.SerializerMethodField()
 
     class Meta:
         model = SalonEmployee
@@ -167,8 +193,12 @@ class SalonEmployeePublicSerializer(serializers.ModelSerializer):
             'id', 'user_name', 'position', 'role_title', 'avatar',
             'specialties', 'experience_years', 'experience_range',
             'average_rating', 'total_reviews', 'total_bookings',
-            'is_active',
+            'is_active', 'services',
         ]
+
+    def get_services(self, obj):
+        services = obj.profile_services.filter(is_active=True)
+        return ProfileServiceSerializer(services, many=True, context=self.context).data
 
 
 class SalonEmployeeCreateSerializer(serializers.Serializer):

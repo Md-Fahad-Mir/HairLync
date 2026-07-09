@@ -6,13 +6,14 @@ from django.db.models import Q
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee
+from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee, ProfileService
 from .serializers import (
     ClientProfileSerializer, ClientProfileUpdateSerializer,
     BarberProfileSerializer, BarberProfileUpdateSerializer, BarberProfileListSerializer,
     SalonProfileSerializer, SalonProfileUpdateSerializer, SalonProfileListSerializer,
     SalonEmployeeSerializer, SalonEmployeePublicSerializer,
     SalonEmployeeCreateSerializer, SalonEmployeeUpdateSerializer,
+    ProfileServiceSerializer,
 )
 from Apps.users.permissions import (
     IsClient, IsBarber, IsSubscribedBarber, IsAdminUser,
@@ -276,6 +277,121 @@ class SalonSearchView(generics.ListAPIView):
             except (ValueError, TypeError):
                 pass
         return qs
+
+
+# ==============================================================================
+# SERVICE MANAGEMENT VIEWS
+# ==============================================================================
+class ProfileServiceManagementMixin:
+    def _get_owner_filter(self, request):
+        user = request.user
+        if user.role == 'barber':
+            try:
+                return {'barber': user.barber_profile}
+            except BarberProfile.DoesNotExist:
+                return None
+        if user.role == 'salon' and not user.is_sub_profile:
+            try:
+                return {'salon': user.salon_profile}
+            except SalonProfile.DoesNotExist:
+                return None
+        if user.role == 'salon' and user.is_sub_profile:
+            try:
+                return {'employee': SalonEmployee.objects.get(user=user)}
+            except SalonEmployee.DoesNotExist:
+                return None
+        return None
+
+    def _get_service(self, request, pk):
+        owner_filter = self._get_owner_filter(request)
+        if not owner_filter:
+            return None
+        try:
+            return ProfileService.objects.get(pk=pk, **owner_filter)
+        except ProfileService.DoesNotExist:
+            return None
+
+
+class ProfileServiceManagementView(ProfileServiceManagementMixin, APIView):
+    """List and create service management items for the current profile."""
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="List service management items for the current barber, salon, or employee profile.",
+        responses={200: ProfileServiceSerializer(many=True)},
+        tags=['Service Management'],
+    )
+    def get(self, request):
+        owner_filter = self._get_owner_filter(request)
+        if not owner_filter:
+            return error_response("Profile not found for service management.", status_code=404)
+        services = ProfileService.objects.filter(**owner_filter)
+        serializer = ProfileServiceSerializer(services, many=True)
+        return success_response(data=serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Add a service management item to the current barber, salon, or employee profile.",
+        request_body=ProfileServiceSerializer,
+        responses={201: ProfileServiceSerializer},
+        tags=['Service Management'],
+    )
+    def post(self, request):
+        owner_filter = self._get_owner_filter(request)
+        if not owner_filter:
+            return error_response("Profile not found for service management.", status_code=404)
+        serializer = ProfileServiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        service = serializer.save(**owner_filter)
+        return success_response(
+            data=ProfileServiceSerializer(service).data,
+            message="Service added successfully.",
+            status_code=201,
+        )
+
+
+class ProfileServiceManagementDetailView(ProfileServiceManagementMixin, APIView):
+    """Get, update, or delete a service management item for the current profile."""
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Get a service management item for the current profile.",
+        responses={200: ProfileServiceSerializer},
+        tags=['Service Management'],
+    )
+    def get(self, request, pk):
+        service = self._get_service(request, pk)
+        if not service:
+            return error_response("Service not found.", status_code=404)
+        return success_response(data=ProfileServiceSerializer(service).data)
+
+    @swagger_auto_schema(
+        operation_description="Update a service management item for the current profile.",
+        request_body=ProfileServiceSerializer,
+        responses={200: ProfileServiceSerializer},
+        tags=['Service Management'],
+    )
+    def patch(self, request, pk):
+        service = self._get_service(request, pk)
+        if not service:
+            return error_response("Service not found.", status_code=404)
+        serializer = ProfileServiceSerializer(service, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return success_response(
+            data=ProfileServiceSerializer(service).data,
+            message="Service updated successfully.",
+        )
+
+    @swagger_auto_schema(
+        operation_description="Delete a service management item for the current profile.",
+        tags=['Service Management'],
+    )
+    def delete(self, request, pk):
+        service = self._get_service(request, pk)
+        if not service:
+            return error_response("Service not found.", status_code=404)
+        service.delete()
+        return success_response(message="Service deleted successfully.")
 
 
 # ==============================================================================
