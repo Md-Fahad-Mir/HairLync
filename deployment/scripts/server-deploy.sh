@@ -1,8 +1,8 @@
 #!/bin/bash
 # ─── server-deploy.sh ─────────────────────────────────────────────────
 # Runs ON the EC2 box (invoked by CI via SSM, or manually). Authenticates
-# to ECR via the instance profile, pulls the requested image tag, restarts
-# the stack, and runs migrations.
+# to ECR via the instance profile, pulls the requested image tag, and restarts
+# the stack.
 # Required env: REGISTRY, IMAGE_TAG.  Optional: AWS_REGION (default eu-north-1).
 set -euo pipefail
 
@@ -25,9 +25,8 @@ COMPOSE="docker compose \
 # Reclaim disk from old layers before pulling new ones.
 docker system prune -af --filter "until=24h" || true
 
-# Pull the images for this exact tag, recreate containers, migrate.
+# Pull the images for this exact tag and recreate containers.
 $COMPOSE pull
 $COMPOSE up -d --force-recreate --remove-orphans
-$COMPOSE exec -T backend python manage.py migrate --noinput
 
 $COMPOSE ps
