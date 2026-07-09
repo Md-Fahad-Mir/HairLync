@@ -21,6 +21,11 @@ urlpatterns = [
     path('salon/<int:pk>/', views.SalonProfileDetailView.as_view(), name='salon-detail'),
     path('salons/search/', views.SalonSearchView.as_view(), name='salon-search'),
 
+
+    # Service management (barber, salon owner, and salon employee)
+    path('service-management/', views.ProfileServiceManagementView.as_view(), name='service-management-list-create'),
+    path('service-management/<int:pk>/', views.ProfileServiceManagementDetailView.as_view(), name='service-management-detail'),
+
     # Salon employee management (salon owner only)
     path('salon/employees/', views.SalonEmployeeListCreateView.as_view(), name='salon-employee-list-create'),
     path('salon/employees/<int:pk>/', views.SalonEmployeeDetailView.as_view(), name='salon-employee-detail'),
