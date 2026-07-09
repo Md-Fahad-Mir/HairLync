@@ -1,27 +1,5 @@
 from django.contrib import admin
-from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee, ProfileService
-
-
-
-class BarberServiceManagementInline(admin.TabularInline):
-    model = ProfileService
-    fk_name = 'barber'
-    extra = 1
-    fields = ('service_name', 'price', 'duration_minutes', 'image', 'is_active')
-
-
-class SalonServiceManagementInline(admin.TabularInline):
-    model = ProfileService
-    fk_name = 'salon'
-    extra = 1
-    fields = ('service_name', 'price', 'duration_minutes', 'image', 'is_active')
-
-
-class EmployeeServiceManagementInline(admin.TabularInline):
-    model = ProfileService
-    fk_name = 'employee'
-    extra = 1
-    fields = ('service_name', 'price', 'duration_minutes', 'image', 'is_active')
+from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee
 
 
 @admin.register(ClientProfile)
@@ -42,7 +20,6 @@ class BarberProfileAdmin(admin.ModelAdmin):
     search_fields = ('business_name', 'user__email', 'city')
     raw_id_fields = ('user',)
     list_editable = ('is_verified',)
-    inlines = (BarberServiceManagementInline,)
 
 
 @admin.register(SalonProfile)
@@ -56,7 +33,6 @@ class SalonProfileAdmin(admin.ModelAdmin):
     search_fields = ('business_name', 'user__email', 'city')
     raw_id_fields = ('user',)
     list_editable = ('is_verified',)
-    inlines = (SalonServiceManagementInline,)
 
     @admin.display(description='Employees')
     def get_employees_count(self, obj):
@@ -73,18 +49,3 @@ class SalonEmployeeAdmin(admin.ModelAdmin):
     search_fields = ('user__email', 'user__full_name', 'salon__business_name', 'generated_email')
     raw_id_fields = ('user', 'salon')
     readonly_fields = ('generated_email', 'generated_password')
-    inlines = (EmployeeServiceManagementInline,)
-
-@admin.register(ProfileService)
-class ProfileServiceAdmin(admin.ModelAdmin):
-    list_display = (
-        'service_name', 'barber', 'salon', 'employee',
-        'price', 'duration_minutes', 'is_active',
-    )
-    list_filter = ('is_active',)
-    search_fields = (
-        'service_name', 'barber__business_name', 'salon__business_name',
-        'employee__user__full_name',
-    )
-    raw_id_fields = ('barber', 'salon', 'employee')
-
