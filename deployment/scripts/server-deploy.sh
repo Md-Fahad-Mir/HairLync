@@ -12,6 +12,24 @@ AWS_REGION="${AWS_REGION:-eu-north-1}"
 export PATH="$PATH:/usr/local/bin"
 export REGISTRY IMAGE_TAG
 
+print_diagnostics() {
+  status=$?
+  if [ "$status" -eq 0 ]; then
+    return
+  fi
+
+  echo "Deploy failed with exit code $status" >&2
+  if [ -n "${COMPOSE:-}" ]; then
+    echo "Docker compose service status:" >&2
+    $COMPOSE ps >&2 || true
+    echo "Backend logs (last 200 lines):" >&2
+    $COMPOSE logs --tail=200 backend >&2 || true
+  fi
+
+  exit "$status"
+}
+trap print_diagnostics EXIT
+
 cd /home/ubuntu/hairiq
 
 # Authenticate Docker to ECR using the EC2 instance profile (no static keys).
