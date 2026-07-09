@@ -200,4 +200,35 @@ jobs:
 
           STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query Status --output text)
           echo "Deploy status: $STATUS"
-          [ "$STATUS" = "Success" ] || exit 1
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "::group::Remote backend diagnostics"
+            DIAG_ID=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --comment "HairIQ deploy diagnostics $TAG" \
+              --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG bash -lc 'cd /home/ubuntu/hairiq && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml ps && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml logs --tail=200 backend'" \
+              --query Command.CommandId --output text)
+
+            for attempt in $(seq 1 12); do
+              DIAG_STATUS=$(aws ssm get-command-invocation \
+                --command-id "$DIAG_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query Status \
+                --output text 2>/dev/null || true)
+
+              case "$DIAG_STATUS" in
+                Success|Cancelled|Failed|TimedOut|Cancelling)
+                  break
+                  ;;
+                *)
+                  sleep 5
+                  ;;
+              esac
+            done
+
+            aws ssm get-command-invocation --command-id "$DIAG_ID" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text || true
+            aws ssm get-command-invocation --command-id "$DIAG_ID" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text || true
+            echo "::endgroup::"
+            exit 1
+          fi
