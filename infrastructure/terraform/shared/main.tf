@@ -59,7 +59,14 @@ resource "aws_s3_bucket_cors_configuration" "media" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "HEAD"]
-    allowed_origins = ["https://api.${var.domain}", "http://localhost:8000"]
+    allowed_origins = [
+      "https://${var.domain}",
+      "https://admin.${var.domain}",
+      "https://api.${var.domain}",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:8000",
+    ]
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }
