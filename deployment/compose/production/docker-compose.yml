@@ -1,26 +1,37 @@
 # ─── Production Compose ───────────────────────────────────────────────
 # Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up -d
 #
-# Pulls pre-built images from Docker Hub (pushed by CI/CD).
+# Pulls pre-built images from ECR (pushed by CI/CD).
+#
+# env_file entries are `required: false` so a selective deploy of one
+# service (docker compose ... pull/up <service>) is not blocked when
+# another service's .env.production.* file is absent on the box. Compose
+# parses the WHOLE merged file even for a single-service pull/up, so a
+# missing sibling env file would otherwise abort the deploy (exit 14).
+# When a file IS present its variables load exactly as before.
 
 services:
   ai:
     image: ${REGISTRY}/hairiq-ai:${IMAGE_TAG:-latest}
     env_file:
-      - ../environments/.env.production.ai
+      - path: ../environments/.env.production.ai
+        required: false
 
   backend:
     image: ${REGISTRY}/hairiq-backend:${IMAGE_TAG:-latest}
     env_file:
-      - ../environments/.env.production.backend
+      - path: ../environments/.env.production.backend
+        required: false
     restart: always
 
   landing:
     image: ${REGISTRY}/hairiq-landing:${IMAGE_TAG:-latest}
     env_file:
-      - ../environments/.env.production.landing
+      - path: ../environments/.env.production.landing
+        required: false
 
   admin:
     image: ${REGISTRY}/hairiq-admin:${IMAGE_TAG:-latest}
     env_file:
-      - ../environments/.env.production.admin
+      - path: ../environments/.env.production.admin
+        required: false
