@@ -37,7 +37,7 @@ help:
 	@echo "  Deploy:"
 	@echo "    make deploy-prod      Full production deploy"
 	@echo "    make deploy-staging   Full staging deploy"
-	@echo "    make rollback TAG=<sha>  Rollback to image tag"
+	@echo "    make rollback TAG=<sha> [SERVICES=\"backend ai\"]  Rollback to image tag"
 	@echo ""
 	@echo "  Monitoring:"
 	@echo "    make monitoring-up    Start monitoring stack"
@@ -102,7 +102,7 @@ deploy-staging:
 	bash deployment/scripts/deploy.sh staging
 
 rollback:
-	bash deployment/scripts/rollback.sh $(TAG)
+	bash deployment/scripts/rollback.sh $(TAG) $(SERVICES)
 
 # ─── Monitoring ───────────────────────────────────────────────────────
 monitoring-up:
