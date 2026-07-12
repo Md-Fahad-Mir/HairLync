@@ -106,6 +106,70 @@ for svc in "${SELECTED[@]}"; do
   fi
 done
 
+# ── Preflight: required env files for the SELECTED services ───────────
+# The production compose marks every env_file `required: false` so a
+# missing SIBLING service's env file can't block a selective deploy.
+# That safety valve must not let a selected service start silently
+# without its own runtime config, so we re-assert the requirement here —
+# but only for the services actually being deployed.
+#
+# Paths mirror deployment/compose/production/docker-compose.yml exactly
+# (../environments/.env.production.<svc>, relative to the compose dir);
+# resolved here from the project root where this script runs.
+declare -A ENV_FILE=(
+  [backend]="deployment/environments/.env.production.backend"
+  [ai]="deployment/environments/.env.production.ai"
+  [admin]="deployment/environments/.env.production.admin"
+  [landing]="deployment/environments/.env.production.landing"
+)
+# backend (Django: SECRET_KEY, DB creds, ...) and ai (LLM API keys) cannot
+# run without their env file. admin/landing are frontends whose only env
+# vars are NEXT_PUBLIC_*/NODE_ENV — baked at build time (admin) or unused
+# at runtime for the static nginx site (landing), with NODE_ENV already
+# set in the base compose — so their env file is optional at runtime.
+REQUIRED_ENV_SERVICES=" backend ai "
+
+# Guard against compose/script drift: every service that has an env_file
+# declared in the compose config must appear in the ENV_FILE map above.
+CONFIG_ENV_FILES="$(compose config 2>/dev/null | grep -oE '\.env\.production\.[a-z]+' | sort -u || true)"
+while IFS= read -r ef; do
+  [ -n "$ef" ] || continue
+  svc="${ef##*.}"
+  if [ -z "${ENV_FILE[$svc]+x}" ]; then
+    echo "ERROR: compose declares env file for '$svc' but this script has no mapping for it." >&2
+    echo "       Update ENV_FILE in $0 to match the compose files." >&2
+    exit 2
+  fi
+done <<< "$CONFIG_ENV_FILES"
+
+MISSING_ENV=()
+for svc in "${SELECTED[@]}"; do
+  case "$REQUIRED_ENV_SERVICES" in
+    *" $svc "*)
+      f="${ENV_FILE[$svc]}"
+      if [ ! -f "$f" ]; then
+        echo "✗ $svc: required env file missing: $f" >&2
+        MISSING_ENV+=("$svc")
+      else
+        echo "✓ $svc: env file present ($f)"
+      fi
+      ;;
+    *)
+      f="${ENV_FILE[$svc]}"
+      if [ -f "$f" ]; then
+        echo "✓ $svc: env file present ($f)"
+      else
+        echo "▷ $svc: env file optional and not present ($f) — proceeding"
+      fi
+      ;;
+  esac
+done
+if [ "${#MISSING_ENV[@]}" -gt 0 ]; then
+  echo "ERROR: refusing to deploy — required env file(s) missing for: ${MISSING_ENV[*]}" >&2
+  echo "       Provision them on the server (Ansible: make ansible-prod) before deploying." >&2
+  exit 2
+fi
+
 echo "▶ Deploying services: ${SELECTED[*]} (tag: $IMAGE_TAG)"
 
 # Authenticate Docker to ECR using the EC2 instance profile (no static keys).
