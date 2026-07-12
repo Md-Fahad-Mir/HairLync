@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      services:
+        description: "Services to deploy: 'all' or a comma-separated subset of backend,ai,admin,landing (manual runs always rebuild the selected services)"
+        required: true
+        default: all
+        type: string
 
 concurrency:
   group: production-deploy
@@ -19,19 +25,29 @@ env:
   AWS_REGION: eu-north-1
   IMAGE_TAG: ${{ github.sha }}
   PRODUCTION_BRANCH: refs/heads/main
-  ECR_REPOSITORIES: hairiq-backend hairiq-ai hairiq-landing hairiq-admin
 
 jobs:
-  # ─── Build & Push to ECR ────────────────────────────────────────────
-  build:
-    name: Build & Push Images to ECR
+  # ─── Detect which services the change set affects ───────────────────
+  detect-changes:
+    name: Detect affected services
     runs-on: ubuntu-latest
     outputs:
-      registry: ${{ steps.login-ecr.outputs.registry }}
+      backend: ${{ steps.detect.outputs.backend }}
+      ai: ${{ steps.detect.outputs.ai }}
+      admin: ${{ steps.detect.outputs.admin }}
+      landing: ${{ steps.detect.outputs.landing }}
+      deploy_all: ${{ steps.detect.outputs.deploy_all }}
+      deployment_required: ${{ steps.detect.outputs.deployment_required }}
+      services: ${{ steps.detect.outputs.services }}
+      infra_changed: ${{ steps.detect.outputs.infra_changed }}
+      reason: ${{ steps.detect.outputs.reason }}
+      changed_count: ${{ steps.detect.outputs.changed_count }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout code (full history for change detection)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Validate production deployment inputs
         run: |
@@ -58,25 +74,54 @@ jobs:
         env:
           AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
 
+      - name: Classify changed files
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          DISPATCH_SERVICES: ${{ inputs.services }}
+        run: |
+          set -euo pipefail
+          chmod +x deployment/scripts/detect-changes.sh
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Manual runs have no reliable before/after range — use the input.
+            deployment/scripts/detect-changes.sh manual "$DISPATCH_SERVICES" | tee -a "$GITHUB_OUTPUT"
+          else
+            # Only accept a well-formed commit SHA as the diff base; anything
+            # else (empty, zeros on first push) falls back to a full deploy.
+            if ! printf '%s' "$BEFORE_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+              BEFORE_SHA=""
+            fi
+            deployment/scripts/detect-changes.sh diff "$BEFORE_SHA" "$HEAD_SHA" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+  # ─── Build & push only the affected images ──────────────────────────
+  build-backend:
+    name: Build & push backend image
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials (OIDC — no static keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: hairiq-prod-build-${{ github.run_id }}
+          role-session-name: hairiq-prod-build-backend-${{ github.run_id }}
           retry-max-attempts: 3
 
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Validate ECR repositories
-        run: |
-          set -euo pipefail
-          for repo in ${ECR_REPOSITORIES}; do
-            aws ecr describe-repositories --repository-names "$repo" >/dev/null
-            echo "Found ECR repository: $repo"
-          done
+      - name: Validate ECR repository
+        run: aws ecr describe-repositories --repository-names hairiq-backend >/dev/null
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -90,8 +135,36 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/hairiq-backend:latest
             ${{ steps.login-ecr.outputs.registry }}/hairiq-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=build-backend
+          cache-to: type=gha,mode=max,scope=build-backend
+
+  build-ai:
+    name: Build & push AI image
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ai == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: hairiq-prod-build-ai-${{ github.run_id }}
+          retry-max-attempts: 3
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Validate ECR repository
+        run: aws ecr describe-repositories --repository-names hairiq-ai >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build & push AI service
         uses: docker/build-push-action@v5
@@ -102,20 +175,36 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/hairiq-ai:latest
             ${{ steps.login-ecr.outputs.registry }}/hairiq-ai:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=build-ai
+          cache-to: type=gha,mode=max,scope=build-ai
 
-      - name: Build & push landing page
-        uses: docker/build-push-action@v5
+  build-admin:
+    name: Build & push admin image
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.admin == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          context: ./services/landing
-          file: ./services/landing/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/hairiq-landing:latest
-            ${{ steps.login-ecr.outputs.registry }}/hairiq-landing:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: hairiq-prod-build-admin-${{ github.run_id }}
+          retry-max-attempts: 3
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Validate ECR repository
+        run: aws ecr describe-repositories --repository-names hairiq-admin >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build & push admin dashboard
         uses: docker/build-push-action@v5
@@ -128,17 +217,70 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/hairiq-admin:${{ github.sha }}
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=build-admin
+          cache-to: type=gha,mode=max,scope=build-admin
 
-  # ─── Deploy to Production (via SSM — no inbound SSH) ────────────────
+  build-landing:
+    name: Build & push landing image
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.landing == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: hairiq-prod-build-landing-${{ github.run_id }}
+          retry-max-attempts: 3
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Validate ECR repository
+        run: aws ecr describe-repositories --repository-names hairiq-landing >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push landing page
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/landing
+          file: ./services/landing/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/hairiq-landing:latest
+            ${{ steps.login-ecr.outputs.registry }}/hairiq-landing:${{ github.sha }}
+          cache-from: type=gha,scope=build-landing
+          cache-to: type=gha,mode=max,scope=build-landing
+
+  # ─── Deploy the affected services (via SSM — no inbound SSH) ────────
   deploy:
     name: Deploy to Production via SSM
     runs-on: ubuntu-latest
-    needs: build
+    needs: [detect-changes, build-backend, build-ai, build-admin, build-landing]
+    # Run when at least one service is affected and no required build failed.
+    # Skipped builds must NOT block the deploy of the services that DID build.
+    if: >-
+      !cancelled() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.deployment_required == 'true' &&
+      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
+      (needs.build-ai.result == 'success' || needs.build-ai.result == 'skipped') &&
+      (needs.build-admin.result == 'success' || needs.build-admin.result == 'skipped') &&
+      (needs.build-landing.result == 'success' || needs.build-landing.result == 'skipped')
     environment: production
 
     steps:
+      - name: Checkout code (deploy assets)
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -147,11 +289,27 @@ jobs:
           role-session-name: hairiq-prod-deploy-${{ github.run_id }}
           retry-max-attempts: 3
 
-      - name: Deploy on the instance via SSM Run Command
+      - name: Resolve ECR registry
+        id: registry
         run: |
           set -euo pipefail
-          REGISTRY='${{ needs.build.outputs.registry }}'
-          TAG='${{ github.sha }}'
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "registry=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy selected services on the instance via SSM Run Command
+        env:
+          SERVICES: ${{ needs.detect-changes.outputs.services }}
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+        run: |
+          set -euo pipefail
+          TAG="$IMAGE_TAG"
+
+          # Defense in depth: the service list feeds a remote command line.
+          if ! printf '%s' "$SERVICES" | grep -Eq '^(all|(backend|ai|admin|landing)( (backend|ai|admin|landing))*)$'; then
+            echo "::error::Invalid services list from change detection: '$SERVICES'"
+            exit 1
+          fi
+          echo "Deploying services: $SERVICES (tag: $TAG)"
 
           # Resolve the running production instance by tag.
           INSTANCE_ID=$(aws ec2 describe-instances \
@@ -163,17 +321,42 @@ jobs:
           fi
           echo "Target instance: $INSTANCE_ID"
 
-          # Tell SSM to run the on-box deploy script as the ubuntu user.
+          # Ship the deploy assets from THIS commit to the server so the
+          # on-box script and production compose files can never drift from
+          # the repo (previously they were only synced by Ansible runs).
+          STAGE=$(mktemp -d)
+          install -D -m 0755 deployment/scripts/server-deploy.sh "$STAGE/server-deploy.sh"
+          install -D -m 0644 deployment/compose/docker-compose.base.yml "$STAGE/deployment/compose/docker-compose.base.yml"
+          install -D -m 0644 deployment/compose/production/docker-compose.yml "$STAGE/deployment/compose/production/docker-compose.yml"
+          ASSETS_B64=$(tar -czf - -C "$STAGE" . | base64 -w0)
+          echo "Deploy asset payload: $(printf '%s' "$ASSETS_B64" | wc -c) base64 bytes"
+
+          # Build the SSM command list as JSON (no shell-quoting pitfalls).
+          CMDS=(
+            "set -Eeuo pipefail"
+            "echo '$ASSETS_B64' | base64 -d > /tmp/hairlync-deploy-assets.tgz"
+            "tar -xzf /tmp/hairlync-deploy-assets.tgz -C /home/ubuntu/hairiq"
+            "rm -f /tmp/hairlync-deploy-assets.tgz"
+            "chown ubuntu:ubuntu /home/ubuntu/hairiq/server-deploy.sh"
+            "chown -R ubuntu:ubuntu /home/ubuntu/hairiq/deployment/compose"
+            "chmod 0755 /home/ubuntu/hairiq/server-deploy.sh"
+            "sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=$AWS_REGION bash /home/ubuntu/hairiq/server-deploy.sh $SERVICES"
+          )
+          jq -n --args '{commands: $ARGS.positional}' -- "${CMDS[@]}" > "$STAGE/ssm-params.json"
+
+          # Tell SSM to sync the assets and run the on-box deploy script.
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "HairIQ deploy $TAG" \
-            --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=${{ env.AWS_REGION }} bash /home/ubuntu/hairiq/server-deploy.sh" \
+            --comment "HairIQ deploy $TAG ($SERVICES)" \
+            --parameters file://"$STAGE/ssm-params.json" \
             --query Command.CommandId --output text)
           echo "SSM command: $CMD_ID"
 
-          # Wait for completion and keep the final status visible even on failure.
-          for attempt in $(seq 1 60); do
+          # Wait for completion and keep the final status visible even on
+          # failure. Worst case on the server: image pulls + a 180s health
+          # timeout per deployed service, so allow up to 25 minutes.
+          for attempt in $(seq 1 150); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$CMD_ID" \
               --instance-id "$INSTANCE_ID" \
@@ -185,7 +368,7 @@ jobs:
                 break
                 ;;
               *)
-                echo "Deploy status check $attempt/60: ${STATUS:-Pending}"
+                echo "Deploy status check $attempt/150: ${STATUS:-Pending}"
                 sleep 10
                 ;;
             esac
@@ -202,12 +385,19 @@ jobs:
           echo "Deploy status: $STATUS"
 
           if [ "$STATUS" != "Success" ]; then
-            echo "::group::Remote backend diagnostics"
+            echo "::group::Remote diagnostics for deployed services"
+            if [ "$SERVICES" = "all" ]; then
+              LOG_SERVICES=""
+            else
+              LOG_SERVICES="$SERVICES"
+            fi
+            DIAG_INNER="cd /home/ubuntu/hairiq && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml ps && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml logs --tail=200 $LOG_SERVICES"
+            jq -n --arg cmd "sudo -u ubuntu bash -lc '$DIAG_INNER'" '{commands: [$cmd]}' > "$STAGE/ssm-diag-params.json"
             DIAG_ID=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
               --comment "HairIQ deploy diagnostics $TAG" \
-              --parameters "commands=sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG bash -lc 'cd /home/ubuntu/hairiq && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml ps && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml logs --tail=200 backend'" \
+              --parameters file://"$STAGE/ssm-diag-params.json" \
               --query Command.CommandId --output text)
 
             for attempt in $(seq 1 12); do
@@ -232,3 +422,86 @@ jobs:
             echo "::endgroup::"
             exit 1
           fi
+
+      - name: Record deployment summary
+        if: success()
+        env:
+          SERVICES: ${{ needs.detect-changes.outputs.services }}
+          BACKEND_AFFECTED: ${{ needs.detect-changes.outputs.backend }}
+        run: |
+          {
+            echo "### Deployment"
+            echo ""
+            echo "- Services deployed: **${SERVICES}**"
+            echo "- Image tag: \`${IMAGE_TAG}\`"
+            if [ "$BACKEND_AFFECTED" = "true" ]; then
+              echo "- Django migrations: **executed** (backend deployed)"
+            else
+              echo "- Django migrations: **skipped** (backend not deployed)"
+            fi
+            echo "- Health checks: enforced on the server for every deployed service"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─── Human-readable result, even when everything was skipped ────────
+  summary:
+    name: Workflow summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-backend, build-ai, build-admin, build-landing, deploy]
+    if: always()
+
+    steps:
+      - name: Write workflow summary
+        env:
+          DETECT_RESULT: ${{ needs.detect-changes.result }}
+          BACKEND: ${{ needs.detect-changes.outputs.backend }}
+          AI: ${{ needs.detect-changes.outputs.ai }}
+          ADMIN: ${{ needs.detect-changes.outputs.admin }}
+          LANDING: ${{ needs.detect-changes.outputs.landing }}
+          DEPLOY_ALL: ${{ needs.detect-changes.outputs.deploy_all }}
+          REQUIRED: ${{ needs.detect-changes.outputs.deployment_required }}
+          INFRA: ${{ needs.detect-changes.outputs.infra_changed }}
+          REASON: ${{ needs.detect-changes.outputs.reason }}
+          BUILD_BACKEND: ${{ needs.build-backend.result }}
+          BUILD_AI: ${{ needs.build-ai.result }}
+          BUILD_ADMIN: ${{ needs.build-admin.result }}
+          BUILD_LANDING: ${{ needs.build-landing.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        run: |
+          set -euo pipefail
+          deployed() {
+            if [ "$1" = "true" ] && [ "$DEPLOY_RESULT" = "success" ]; then
+              echo "yes"
+            else
+              echo "no"
+            fi
+          }
+          {
+            echo "## Selective deployment summary"
+            echo ""
+            echo "${REASON:-Change detection did not run.}"
+            echo ""
+            echo "| Service | Affected | Build | Deployed |"
+            echo "|---|---|---|---|"
+            echo "| backend | ${BACKEND:-n/a} | ${BUILD_BACKEND} | $(deployed "${BACKEND:-false}") |"
+            echo "| ai | ${AI:-n/a} | ${BUILD_AI} | $(deployed "${AI:-false}") |"
+            echo "| admin | ${ADMIN:-n/a} | ${BUILD_ADMIN} | $(deployed "${ADMIN:-false}") |"
+            echo "| landing | ${LANDING:-n/a} | ${BUILD_LANDING} | $(deployed "${LANDING:-false}") |"
+            echo ""
+            echo "- Full-stack deploy: **${DEPLOY_ALL:-n/a}**"
+            echo "- Deployment job: **${DEPLOY_RESULT}**"
+            if [ "${BACKEND:-false}" = "true" ] && [ "$DEPLOY_RESULT" = "success" ]; then
+              echo "- Django migrations: **executed**"
+            else
+              echo "- Django migrations: **not executed**"
+            fi
+            if [ "${REQUIRED:-false}" != "true" ] && [ "$DETECT_RESULT" = "success" ]; then
+              echo ""
+              echo "✅ **No deployable services changed — builds and deployment were skipped.**"
+            fi
+            if [ "${INFRA:-false}" = "true" ]; then
+              echo ""
+              echo "> ⚠️ Infrastructure/Nginx/monitoring files changed. Apply them with"
+              echo "> Ansible/Terraform (\`make ansible-prod\` / \`make tf-apply\`) — this"
+              echo "> pipeline does not deploy them."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
