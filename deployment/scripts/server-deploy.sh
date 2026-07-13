@@ -2,9 +2,14 @@
 # ─── server-deploy.sh ─────────────────────────────────────────────────
 # Runs ON the EC2 box (invoked by CI via SSM, or manually). Authenticates
 # to ECR via the instance profile, pulls ONLY the requested service
-# images, recreates ONLY the requested services, runs Django migrations
-# when the backend is among them, and waits for the deployed containers
-# to become healthy.
+# images, recreates ONLY the requested services, and waits for the
+# deployed containers to become healthy.
+#
+# Django migrations are NOT run here: the backend container's
+# entrypoint.sh runs `manage.py migrate` on startup, so that is the
+# single migration source of truth. Running migrate again from this
+# script after `up` caused duplicate DDL during rollout
+# (duplicate key ... "pg_type_typname_nsp_index"). See PR #3.
 #
 # Usage:
 #   server-deploy.sh <service> [service...]   services: backend ai admin landing
@@ -190,16 +195,14 @@ else
   compose up -d --force-recreate --no-deps "${SELECTED[@]}"
 fi
 
-# ── Django migrations: only when the backend is part of this deploy ───
-backend_selected=false
-for svc in "${SELECTED[@]}"; do
-  [ "$svc" = "backend" ] && backend_selected=true
-done
-if $backend_selected; then
-  echo "▶ Running Django migrations (backend is in this deploy)..."
-  compose exec -T backend python manage.py migrate --noinput
-else
-  echo "▷ Backend not in this deploy — skipping Django migrations."
+# ── Django migrations ─────────────────────────────────────────────────
+# Not run from this script. The backend container's entrypoint.sh runs
+# `manage.py migrate` on startup (single source of truth). Running it
+# again here after `up` caused duplicate DDL during rollout — see PR #3.
+# A backend deploy still applies migrations via that entrypoint, and the
+# health gate below fails the deploy if the backend does not come up.
+if printf '%s\n' "${SELECTED[@]}" | grep -qx backend; then
+  echo "▷ Backend deploy: migrations run in the container entrypoint on startup."
 fi
 
 # ── Health gate: wait for each deployed service to become healthy ─────
