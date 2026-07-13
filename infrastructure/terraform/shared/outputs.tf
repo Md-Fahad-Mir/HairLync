@@ -8,6 +8,16 @@ output "s3_bucket_name" {
   description = "S3 bucket name"
 }
 
+output "cloudfront_domain_name" {
+  value       = aws_cloudfront_distribution.media.domain_name
+  description = "CloudFront distribution domain for media (set as AWS_S3_CUSTOM_DOMAIN in the backend env)"
+}
+
+output "cloudfront_distribution_id" {
+  value       = aws_cloudfront_distribution.media.id
+  description = "CloudFront distribution ID (for cache invalidations)"
+}
+
 output "rds_endpoint" {
   value       = aws_db_instance.postgres.endpoint
   description = "RDS instance endpoint"
