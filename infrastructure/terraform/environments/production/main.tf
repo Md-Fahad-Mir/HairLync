@@ -59,3 +59,13 @@ output "rds_endpoint" {
   value     = module.infra.rds_endpoint
   sensitive = true
 }
+
+# Set this value as AWS_S3_CUSTOM_DOMAIN in the backend production env so
+# Django serves media through the CDN. See docs/cloudfront-media.md.
+output "cloudfront_domain_name" {
+  value = module.infra.cloudfront_domain_name
+}
+
+output "cloudfront_distribution_id" {
+  value = module.infra.cloudfront_distribution_id
+}
