@@ -42,18 +42,68 @@ jobs:
           DB_NAME: ":memory:"
           DJANGO_ALLOWED_HOSTS: "localhost"
 
-      # ─── Docker Lint ──────────────────────────────────────────────
-      - name: Validate Dockerfiles
+      # ─── Docker Validation ────────────────────────────────────────
+      - name: Validate backend Dockerfile
         run: |
-          docker build --no-cache --target builder -f services/backend/Dockerfile ./services/backend 2>&1 | tail -5
-          docker build --no-cache --target builder -f services/ai/Dockerfile ./services/ai 2>&1 | tail -5
+          docker build \
+            --no-cache \
+            --target builder \
+            -f services/backend/Dockerfile \
+            ./services/backend
 
-      # ─── Compose Validation ───────────────────────────────────────
-      - name: Validate docker-compose files
+      - name: Validate AI Dockerfile
         run: |
-          docker compose -f deployment/compose/docker-compose.base.yml config --quiet
+          docker build \
+            --no-cache \
+            --target builder \
+            -f services/ai/Dockerfile \
+            ./services/ai
 
-      # ─── Terraform Validate ───────────────────────────────────────
+      # ─── Docker Compose Validation ────────────────────────────────
+      - name: Validate production Docker Compose configuration
+        run: |
+          docker compose \
+            -f deployment/compose/docker-compose.base.yml \
+            -f deployment/compose/production/docker-compose.yml \
+            config --quiet
+
+      - name: Validate staging Docker Compose configuration
+        run: |
+          docker compose \
+            -f deployment/compose/docker-compose.base.yml \
+            -f deployment/compose/staging/docker-compose.yml \
+            config --quiet
+
+      - name: Validate local Docker Compose configuration
+        run: |
+          docker compose \
+            -f deployment/compose/docker-compose.base.yml \
+            -f deployment/compose/local/docker-compose.yml \
+            config --quiet
+
+      - name: Validate production Compose service names
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          services="$(
+            docker compose \
+              -f deployment/compose/docker-compose.base.yml \
+              -f deployment/compose/production/docker-compose.yml \
+              config --services
+          )"
+
+          echo "Detected production Compose services:"
+          echo "$services"
+
+          for required_service in backend ai admin landing; do
+            if ! grep -qx "$required_service" <<< "$services"; then
+              echo "Missing required Compose service: $required_service" >&2
+              exit 1
+            fi
+          done
+
+      # ─── Terraform Validation ─────────────────────────────────────
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -62,7 +112,7 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive infrastructure/terraform/
 
-      - name: Terraform Validate (production)
+      - name: Terraform Validate production
         run: |
           cd infrastructure/terraform/environments/production
           terraform init -backend=false

@@ -2,6 +2,12 @@
 # Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up
 #
 # Builds from source with hot-reload volumes mounted.
+#
+# env_file entries are `required: false` (as in the production/staging
+# overrides) so `docker compose ... config` validates even when the
+# developer-created .env.local.* files are absent (e.g. on CI). Copy the
+# deployment/environments/*.env.example templates to .env.local.<svc> for
+# real local runs; their variables load normally when present.
 
 services:
   ai:
@@ -9,7 +15,8 @@ services:
       context: ../../services/ai
       dockerfile: Dockerfile
     env_file:
-      - ../environments/.env.local.ai
+      - path: ../environments/.env.local.ai
+        required: false
     volumes:
       - ../../services/ai:/app
 
@@ -18,7 +25,8 @@ services:
       context: ../../services/backend
       dockerfile: Dockerfile
     env_file:
-      - ../environments/.env.local.backend
+      - path: ../environments/.env.local.backend
+        required: false
     volumes:
       - ../../services/backend:/app
     environment:
@@ -29,7 +37,8 @@ services:
       context: ../../services/landing
       dockerfile: Dockerfile
     env_file:
-      - ../environments/.env.local.landing
+      - path: ../environments/.env.local.landing
+        required: false
     environment:
       NODE_ENV: development
 
@@ -40,7 +49,8 @@ services:
       target: deps
     command: npm run dev
     env_file:
-      - ../environments/.env.local.admin
+      - path: ../environments/.env.local.admin
+        required: false
     volumes:
       - ../../services/admin:/app
       - /app/node_modules
