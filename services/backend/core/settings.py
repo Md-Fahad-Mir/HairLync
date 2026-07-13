@@ -47,7 +47,6 @@ DEBUG = env_bool('DJANGO_DEBUG', True)
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
 
-
 #=====================================================================
 # Application definition
 #=====================================================================
