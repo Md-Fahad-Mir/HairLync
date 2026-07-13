@@ -31,3 +31,23 @@ for p in IAMFullAccess AmazonEC2FullAccess AmazonRDSFullAccess AmazonS3FullAcces
 done
 ```
 Root account is the ultimate break-glass (console).
+
+## GitHub Actions ECR access (`hairiq-github-ci`)
+
+Attach or inline `github-actions-ecr-policy.json` on the GitHub OIDC role:
+
+`arn:aws:iam::242969681131:role/hairiq-github-ci`
+
+This policy supports the ECR steps in `.github/workflows/deploy.yml`:
+
+- `aws-actions/amazon-ecr-login` requires `ecr:GetAuthorizationToken`.
+- `Validate ECR repositories` requires `ecr:DescribeRepositories`.
+- `docker/build-push-action` with `push: true` requires the repository-scoped layer upload and image push actions.
+
+`ecr:GetAuthorizationToken` must use `"Resource": "*"` because AWS does not
+support resource-level scoping for that action. All other ECR permissions are
+scoped to the four existing repositories in account `242969681131`, region
+`eu-north-1`.
+
+The GitHub repository identity for OIDC trust is `Md-Fahad-Mir/HairLync`.
+Existing AWS resources may still use the `hairiq-*` names.
