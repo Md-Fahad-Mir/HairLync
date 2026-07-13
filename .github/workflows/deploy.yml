@@ -348,9 +348,15 @@ jobs:
           # box caused `bash: server-deploy.sh: Permission denied`, exit 126).
           REMOTE_SCRIPT=$(cat <<REMOTE
           set -Eeuo pipefail
+          mkdir -p /home/ubuntu/hairiq
           echo '$ASSETS_B64' | base64 -d > /tmp/hairlync-deploy-assets.tgz
           tar -xzf /tmp/hairlync-deploy-assets.tgz -C /home/ubuntu/hairiq
           rm -f /tmp/hairlync-deploy-assets.tgz
+          # The deploy runs as the ubuntu user and changes into this dir. A
+          # prior root-owned /home/ubuntu/hairiq made ubuntu's cd fail with
+          # "Permission denied" (deploy exit 1). Ensure ubuntu owns its project
+          # dir and the synced assets so it can traverse in and read compose.
+          chown ubuntu:ubuntu /home/ubuntu/hairiq
           chown ubuntu:ubuntu /home/ubuntu/hairiq/server-deploy.sh
           chown -R ubuntu:ubuntu /home/ubuntu/hairiq/deployment/compose
           chmod 0644 /home/ubuntu/hairiq/server-deploy.sh
