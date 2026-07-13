@@ -7,7 +7,7 @@ so managing its own permissions in Terraform state risks a mid-apply lockout.
 
 | Policy | ARN | Purpose |
 |---|---|---|
-| `HairIQ-TerraformInfra` | `arn:aws:iam::242969681131:policy/HairIQ-TerraformInfra` | ec2/rds/ecr/s3/dynamodb/kms — region-locked to `eu-north-1` + scoped to our buckets/table/repos |
+| `HairIQ-TerraformInfra` | `arn:aws:iam::242969681131:policy/HairIQ-TerraformInfra` | ec2/rds/ecr/s3/dynamodb/kms — region-locked to `eu-north-1` + scoped to our buckets/table/repos. **cloudfront** for the media CDN is NOT region-locked (CloudFront is a global service; a `RequestedRegion` condition would deny it). |
 | `HairIQ-TerraformIAM` | `arn:aws:iam::242969681131:policy/HairIQ-TerraformIAM` | IAM writes scoped to `hairiq-*` roles/instance-profiles/policies + the GitHub OIDC provider; `PassRole` only the EC2 role. Read-only IAM elsewhere. **No privilege escalation.** |
 
 Note the policies are named `HairIQ-*` (capitalized) so they fall **outside** the
