@@ -2,24 +2,35 @@
 # Usage: docker compose -f ../docker-compose.base.yml -f docker-compose.yml up -d
 #
 # Uses staging-tagged images. Mirrors production but with staging env.
+#
+# env_file entries are `required: false` (as in the production override)
+# so `docker compose ... config`, a selective deploy, or CI validation is
+# not blocked when a service's .env.staging.* file is absent on the box.
+# Compose parses the WHOLE merged file even for a single-service pull/up,
+# so a missing sibling env file would otherwise abort with exit 14. When
+# a file IS present its variables load exactly as before.
 
 services:
   ai:
     image: ${REGISTRY}/hairiq-ai:staging
     env_file:
-      - ../environments/.env.staging.ai
+      - path: ../environments/.env.staging.ai
+        required: false
 
   backend:
     image: ${REGISTRY}/hairiq-backend:staging
     env_file:
-      - ../environments/.env.staging.backend
+      - path: ../environments/.env.staging.backend
+        required: false
 
   landing:
     image: ${REGISTRY}/hairiq-landing:staging
     env_file:
-      - ../environments/.env.staging.landing
+      - path: ../environments/.env.staging.landing
+        required: false
 
   admin:
     image: ${REGISTRY}/hairiq-admin:staging
     env_file:
-      - ../environments/.env.staging.admin
+      - path: ../environments/.env.staging.admin
+        required: false
