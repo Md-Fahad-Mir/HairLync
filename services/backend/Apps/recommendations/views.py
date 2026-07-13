@@ -93,7 +93,9 @@ class ClientRecommendationsView(generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return StyleRecommendation.objects.filter(client=self.request.user)
+        return StyleRecommendation.objects.filter(
+            client=self.request.user
+        ).select_related('barber', 'client', 'category')
 
 
 class BarberRecommendationsView(generics.ListAPIView):
@@ -110,6 +112,8 @@ class BarberRecommendationsView(generics.ListAPIView):
 
     def get_queryset(self):
         try:
-            return StyleRecommendation.objects.filter(barber=self.request.user.barber_profile)
+            return StyleRecommendation.objects.filter(
+                barber=self.request.user.barber_profile
+            ).select_related('barber', 'client', 'category')
         except BarberProfile.DoesNotExist:
             return StyleRecommendation.objects.none()

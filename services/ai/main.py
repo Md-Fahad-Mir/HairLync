@@ -9,11 +9,14 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from hair_code import analyze, enrich_analysis_with_tutorials
 
 
 logger = logging.getLogger("main")
+
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "10")) * 1024 * 1024
 
 
 def _configure_logging() -> None:
@@ -135,7 +138,7 @@ async def analyze_image(
     image: UploadFile = File(...),
     gender: Literal["male", "female"] = Form(...),
     hair_length: Literal["short", "medium", "long", "extra long"] = Form(...),
-    occasion: Literal["casual", "formal", "party", "wedding", "work"] = Form(...),
+    occasion: Literal["casual", "formal", "wedding", "party", "business", "date", "everyday"] = Form(...),
 ) -> dict[str, Any]:
     suffix = _guess_suffix(image)
     if not suffix:
@@ -144,14 +147,30 @@ async def analyze_image(
             detail="Unsupported image type. Use jpg, jpeg, png, webp, or gif.",
         )
 
+    contents = await image.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image too large. Max size is {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
+        )
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             temp_path = Path(temp_file.name)
-            temp_file.write(await image.read())
+            temp_file.write(contents)
 
         normalized_hair_length = hair_length.replace(" ", "_")
-        result = enrich_analysis_with_tutorials(analyze(temp_path, gender, normalized_hair_length, occasion))
+        # analyze() / enrich_analysis_with_tutorials() are synchronous and do
+        # blocking network I/O (OpenAI + YouTube) — run off the event loop so
+        # one slow request doesn't stall every other concurrent request.
+        result = await run_in_threadpool(
+            lambda: enrich_analysis_with_tutorials(
+                analyze(temp_path, gender, normalized_hair_length, occasion)
+            )
+        )
         response: dict[str, Any] = {
             "analysis": result,
             "meta": {
@@ -167,14 +186,19 @@ async def analyze_image(
 
     except HTTPException:
         raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except (RuntimeError, FileNotFoundError, ValueError) as exc:
+        # Known, expected failure modes (missing key, bad image, invalid model config).
+        logger.error("Analysis failed: %s", exc)
+        raise HTTPException(status_code=502, detail="AI analysis failed. Please try again shortly.") from exc
+    except Exception:
+        logger.exception("Unexpected error during image analysis")
+        raise HTTPException(status_code=500, detail="Internal server error.") from None
     finally:
         if temp_path and temp_path.exists():
             try:
                 temp_path.unlink()
             except OSError:
-                pass
+                logger.warning("Failed to remove temp file %s", temp_path)
 
 
 if __name__ == "__main__":
