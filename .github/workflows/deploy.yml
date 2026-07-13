@@ -331,18 +331,29 @@ jobs:
           ASSETS_B64=$(tar -czf - -C "$STAGE" . | base64 -w0)
           echo "Deploy asset payload: $(printf '%s' "$ASSETS_B64" | wc -c) base64 bytes"
 
-          # Build the SSM command list as JSON (no shell-quoting pitfalls).
-          CMDS=(
-            "set -Eeuo pipefail"
-            "echo '$ASSETS_B64' | base64 -d > /tmp/hairlync-deploy-assets.tgz"
-            "tar -xzf /tmp/hairlync-deploy-assets.tgz -C /home/ubuntu/hairiq"
-            "rm -f /tmp/hairlync-deploy-assets.tgz"
-            "chown ubuntu:ubuntu /home/ubuntu/hairiq/server-deploy.sh"
-            "chown -R ubuntu:ubuntu /home/ubuntu/hairiq/deployment/compose"
-            "chmod 0755 /home/ubuntu/hairiq/server-deploy.sh"
-            "sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=$AWS_REGION bash /home/ubuntu/hairiq/server-deploy.sh $SERVICES"
+          # Build the SSM command as JSON (no shell-quoting pitfalls).
+          #
+          # AWS-RunShellScript runs each command with /bin/sh (dash), which
+          # does NOT support `set -o pipefail` or `set -E` — a leading
+          # `set -Eeuo pipefail` makes dash abort with "Illegal option -o
+          # pipefail" before anything runs. So the real work is written as a
+          # bash script, base64-encoded, and the single dash command just
+          # decodes it and pipes it into bash. dash only runs one pipeline;
+          # bash runs the strict script and its exit status propagates.
+          REMOTE_SCRIPT=$(cat <<REMOTE
+          set -Eeuo pipefail
+          echo '$ASSETS_B64' | base64 -d > /tmp/hairlync-deploy-assets.tgz
+          tar -xzf /tmp/hairlync-deploy-assets.tgz -C /home/ubuntu/hairiq
+          rm -f /tmp/hairlync-deploy-assets.tgz
+          chown ubuntu:ubuntu /home/ubuntu/hairiq/server-deploy.sh
+          chown -R ubuntu:ubuntu /home/ubuntu/hairiq/deployment/compose
+          chmod 0755 /home/ubuntu/hairiq/server-deploy.sh
+          sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=$AWS_REGION bash /home/ubuntu/hairiq/server-deploy.sh $SERVICES
+          REMOTE
           )
-          jq -n --args '{commands: $ARGS.positional}' -- "${CMDS[@]}" > "$STAGE/ssm-params.json"
+          REMOTE_B64=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          jq -n --arg b64 "$REMOTE_B64" \
+            '{commands: [("echo " + $b64 + " | base64 -d | bash")]}' > "$STAGE/ssm-params.json"
 
           # Tell SSM to sync the assets and run the on-box deploy script.
           CMD_ID=$(aws ssm send-command \
@@ -391,7 +402,9 @@ jobs:
             else
               LOG_SERVICES="$SERVICES"
             fi
-            DIAG_INNER="cd /home/ubuntu/hairiq && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml ps && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml logs --tail=200 $LOG_SERVICES"
+            # Keep --tail small: SSM caps StandardOutputContent (~24KB) and a
+            # noisy app log otherwise buries the real failure in this output.
+            DIAG_INNER="cd /home/ubuntu/hairiq && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml ps && docker compose -f deployment/compose/docker-compose.base.yml -f deployment/compose/production/docker-compose.yml logs --tail=40 $LOG_SERVICES"
             jq -n --arg cmd "sudo -u ubuntu bash -lc '$DIAG_INNER'" '{commands: [$cmd]}' > "$STAGE/ssm-diag-params.json"
             DIAG_ID=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
