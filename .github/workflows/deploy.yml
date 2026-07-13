@@ -340,6 +340,12 @@ jobs:
           # bash script, base64-encoded, and the single dash command just
           # decodes it and pipes it into bash. dash only runs one pipeline;
           # bash runs the strict script and its exit status propagates.
+          #
+          # The on-box deploy script is fed to the ubuntu user's bash on
+          # STDIN (root cats it, ubuntu runs it) rather than executed by
+          # path — so the deploy no longer depends on the extracted file's
+          # mode/ownership being just right (a prior root-owned copy on the
+          # box caused `bash: server-deploy.sh: Permission denied`, exit 126).
           REMOTE_SCRIPT=$(cat <<REMOTE
           set -Eeuo pipefail
           echo '$ASSETS_B64' | base64 -d > /tmp/hairlync-deploy-assets.tgz
@@ -347,8 +353,8 @@ jobs:
           rm -f /tmp/hairlync-deploy-assets.tgz
           chown ubuntu:ubuntu /home/ubuntu/hairiq/server-deploy.sh
           chown -R ubuntu:ubuntu /home/ubuntu/hairiq/deployment/compose
-          chmod 0755 /home/ubuntu/hairiq/server-deploy.sh
-          sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=$AWS_REGION bash /home/ubuntu/hairiq/server-deploy.sh $SERVICES
+          chmod 0644 /home/ubuntu/hairiq/server-deploy.sh
+          cat /home/ubuntu/hairiq/server-deploy.sh | sudo -u ubuntu env REGISTRY=$REGISTRY IMAGE_TAG=$TAG AWS_REGION=$AWS_REGION bash -s -- $SERVICES
           REMOTE
           )
           REMOTE_B64=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
