@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -16,35 +17,38 @@ from openai import OpenAI
 # Load environment variables from .env file
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")  # Default: GPT-5.5 for best vision
+MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")  # Default: GPT-4o, a generally-available vision model
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 YOUTUBE_MAX_RESULTS = max(1, int(os.getenv("YOUTUBE_MAX_RESULTS", "3")))
 YOUTUBE_SAFE_SEARCH = os.getenv("YOUTUBE_SAFE_SEARCH", "moderate")
 YOUTUBE_TIMEOUT = float(os.getenv("YOUTUBE_TIMEOUT", "10"))
+
+_PLACEHOLDER_KEYS = {"", "your-youtube-api-key", "your_youtube_api_key_here", "mock-key-for-local-dev"}
 
 
 def _has_usable_youtube_key() -> bool:
     if not YOUTUBE_API_KEY:
         return False
     key = YOUTUBE_API_KEY.strip()
-    if not key or key.startswith("http://") or key.startswith("https://"):
+    if key.lower() in _PLACEHOLDER_KEYS:
+        return False
+    if key.startswith("http://") or key.startswith("https://"):
         return False
     return True
 
-# Model Priority List (will use first available):
-# GPT-5.5 is best for deep image understanding and contextual reasoning
+# Model Priority List (will use first available). Ordered from strongest
+# generally-available vision-capable model down to cheaper fallbacks.
 PREFERRED_MODELS = [
-    "gpt-5.5",                  # Best: Deep vision + context analysis
-    "gpt-5",                    # Future: GPT-5 base
-    "gpt-5-preview",            # Future: GPT-5 preview
+    "gpt-4o",                   # Stable: strong vision + reasoning
     "chatgpt-4o-latest",        # Good: Latest ChatGPT-4o
-    "o1-preview",               # Good: Advanced reasoning
-    "gpt-4o",                   # Stable: GPT-4o
-    "gpt-4o-mini",              # Budget: Fast and cheap
+    "gpt-4o-mini",              # Budget: fast and cheap
+    "gpt-5",                    # Used automatically if/when available on the account
 ]
 
 OUTPUT_DIR = Path("./reports")
@@ -184,6 +188,10 @@ def fetch_youtube_tutorials(query: str, max_results: int | None = None) -> list[
     ]
 
     if not _has_usable_youtube_key():
+        logger.warning(
+            "YOUTUBE_API_KEY not configured (or is a placeholder); "
+            "falling back to a YouTube search link instead of specific videos."
+        )
         return fallback
 
     limit = max_results or YOUTUBE_MAX_RESULTS
@@ -202,7 +210,19 @@ def fetch_youtube_tutorials(query: str, max_results: int | None = None) -> list[
         request = Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urlopen(request, timeout=YOUTUBE_TIMEOUT) as response:
             payload = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+    except HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="ignore")[:500]
+        except Exception:
+            pass
+        if exc.code == 403:
+            logger.error("YouTube API request forbidden (quota exceeded or invalid key): %s", body)
+        else:
+            logger.error("YouTube API HTTP error %s: %s", exc.code, body)
+        return fallback
+    except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+        logger.error("YouTube API request failed for query %r: %s", query, exc)
         return fallback
 
     tutorials: list[dict] = []
@@ -290,24 +310,28 @@ def get_best_available_model(client: OpenAI, preferred_model: str) -> str:
     try:
         # Try to list available models
         models = client.models.list()
-        available_model_ids = [model.id for model in models.data]
-        
-        # Check if preferred model is available
-        if preferred_model in available_model_ids:
-            return preferred_model
-        
-        # Check for GPT-5 or newer models
-        for model_name in PREFERRED_MODELS:
-            if model_name in available_model_ids:
-                print(f"ℹ️  Using {model_name} (better than configured model)")
-                return model_name
-        
-        # Fallback to configured model (API will error if not available)
+        available_model_ids = {model.id for model in models.data}
+    except Exception as exc:
+        # If we can't list models, just use the configured one and let the
+        # chat completion call surface any "model not found" error clearly.
+        logger.warning("Could not list OpenAI models (%s); using configured model %r", exc, preferred_model)
         return preferred_model
-        
-    except Exception:
-        # If we can't list models, just use the configured one
+
+    if preferred_model in available_model_ids:
         return preferred_model
+
+    for model_name in PREFERRED_MODELS:
+        if model_name in available_model_ids:
+            logger.info("Configured model %r unavailable; using %r instead", preferred_model, model_name)
+            return model_name
+
+    logger.warning(
+        "Configured model %r is not in the account's available models and no "
+        "fallback from PREFERRED_MODELS matched; the analysis request will "
+        "likely fail. Set OPENAI_MODEL to a model your account can access.",
+        preferred_model,
+    )
+    return preferred_model
 
 
 def analyze(image_path: Path, gender: str, hair_length: str, occasion: str) -> dict:
@@ -665,14 +689,15 @@ def main() -> None:
             print("Error: Please enter 'short', 'medium', 'long', or 'extra_long'")
 
     # Get occasion
+    valid_occasions = {"casual", "formal", "wedding", "party", "business", "date", "everyday"}
     if len(sys.argv) > 4:
         occasion = sys.argv[4].strip().lower()
     else:
         while True:
-            occasion = input("Enter occasion (casual/formal/party/wedding/work): ").strip().lower()
-            if occasion in {"casual", "formal", "party", "wedding", "work"}:
+            occasion = input("Enter occasion (casual/formal/wedding/party/business/date/everyday): ").strip().lower()
+            if occasion in valid_occasions:
                 break
-            print("Error: Please enter 'casual', 'formal', 'party', 'wedding', or 'work'")
+            print(f"Error: Please enter one of {', '.join(sorted(valid_occasions))}")
     
     print()
     print("-" * 60)

@@ -43,7 +43,7 @@ class EducationalContentListView(generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        qs = EducationalContent.objects.filter(is_published=True)
+        qs = EducationalContent.objects.filter(is_published=True).select_related('category', 'author')
         # If user doesn't have subscription, only show free content
         if not self.request.user.is_subscribed():
             qs = qs.filter(is_premium=False)
