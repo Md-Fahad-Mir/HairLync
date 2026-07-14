@@ -159,7 +159,7 @@ export default function AdminDashboard() {
 
   const handleRunAIRecommendation = (id) => {
     setAnalyzingId(id);
-    triggerToast('Sending portrait to HairIQ AI engine (Google Studio/OpenAI API fallback)...', 'success');
+    triggerToast('Sending portrait to Hairlync AI engine (Google Studio/OpenAI API fallback)...', 'success');
 
     setTimeout(() => {
       const styles = [
@@ -754,7 +754,7 @@ export default function AdminDashboard() {
       <aside className="sidebar">
         <div className="logo-section">
           <div className="logo-badge">IQ</div>
-          <span className="logo-title">HairIQ Admin</span>
+          <span className="logo-title">Hairlync Admin</span>
         </div>
 
         <nav className="nav-menu">
@@ -796,7 +796,7 @@ export default function AdminDashboard() {
         <header className="header-bar">
           <div>
             <h1 className="page-title">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Dashboard</h1>
-            <div className="page-subtitle">Real-time control over HairIQ models, user groups, and platform statistics.</div>
+            <div className="page-subtitle">Real-time control over Hairlync models, user groups, and platform statistics.</div>
           </div>
           <div className="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
@@ -1321,7 +1321,7 @@ export default function AdminDashboard() {
             {analyzingId === selectedAi.id ? (
               <div className="ai-scanning-overlay">
                 <div className="ai-laser"></div>
-                <div style={{ color: '#ab7df8', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '8px' }}>HairIQ AI Model Running...</div>
+                <div style={{ color: '#ab7df8', fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '8px' }}>Hairlync AI Model Running...</div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-sec)' }}>Analyzing hair follicle density, length structures, and facial features.</div>
               </div>
             ) : selectedAi.status === 'pending' ? (
