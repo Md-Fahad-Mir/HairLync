@@ -9,4 +9,9 @@ urlpatterns = [
     path('my/', views.BarberServiceListCreateView.as_view(), name='barber-services'),
     path('my/<int:pk>/', views.BarberServiceDetailView.as_view(), name='barber-service-detail'),
     path('barber/<int:barber_id>/', views.BarberServicesPublicView.as_view(), name='barber-services-public'),
+
+    # Salon services (public + salon-owner management)
+    path('salon/manage/', views.SalonServiceListCreateView.as_view(), name='salon-services-manage'),
+    path('salon/manage/<int:pk>/', views.SalonServiceDetailView.as_view(), name='salon-service-detail'),
+    path('salon/<int:salon_id>/', views.SalonServicesPublicView.as_view(), name='salon-services-public'),
 ]
