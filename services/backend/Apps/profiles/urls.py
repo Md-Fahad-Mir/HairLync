@@ -6,6 +6,7 @@ app_name = 'profiles'
 urlpatterns = [
     # Client profile
     path('client/', views.ClientProfileView.as_view(), name='client-profile'),
+    path('clients/', views.ClientProfileListView.as_view(), name='client-list'),
 
     # Barber profile (own)
     path('barber/', views.BarberProfileView.as_view(), name='barber-profile'),
