@@ -60,6 +60,33 @@ class ClientProfileView(APIView):
             message="Profile updated successfully.",
         )
 
+class ClientProfileListView(generics.ListAPIView):
+    """
+    List all active client profiles and allow filtering/searching.
+    Can search by client profile ID, user ID, email, or full name.
+    """
+    queryset = ClientProfile.objects.filter(user__is_active=True)
+    serializer_class = ClientProfileSerializer
+    permission_classes = [IsAuthenticated]  # Or AllowAny, depending on security requirements
+
+    # Use django-filter fields for exact matches (like ID)
+    filterset_fields = ['id', 'user__id']
+    
+    # Use search fields for text queries (like full name or email)
+    search_fields = ['user__full_name', 'user__email']
+
+    @swagger_auto_schema(
+        operation_description="List client profiles. Filter by 'id' or 'user__id' query parameters.",
+        manual_parameters=[
+            openapi.Parameter('id', openapi.IN_QUERY, description="Filter by client profile ID", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('user__id', openapi.IN_QUERY, description="Filter by user account ID", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('search', openapi.IN_QUERY, description="Search by email or name", type=openapi.TYPE_STRING),
+        ],
+        tags=['Client Profile Search'],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
 
 # ==============================================================================
 # BARBER PROFILE VIEWS
