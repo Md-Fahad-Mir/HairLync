@@ -358,6 +358,22 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@hairlync.com')
 
 #=====================================================================
+# Stripe Settings
+#=====================================================================
+STRIPE_SECRET_KEY = env_str('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = env_str('STRIPE_PUBLISHABLE_KEY')
+STRIPE_WEBHOOK_SECRET = env_str('STRIPE_WEBHOOK_SECRET')
+STRIPE_CHECKOUT_SUCCESS_URL = env_str(
+    'STRIPE_CHECKOUT_SUCCESS_URL', 'https://hairlync.com/billing/success'
+)
+STRIPE_CHECKOUT_CANCEL_URL = env_str(
+    'STRIPE_CHECKOUT_CANCEL_URL', 'https://hairlync.com/billing/cancel'
+)
+STRIPE_BILLING_PORTAL_RETURN_URL = env_str(
+    'STRIPE_BILLING_PORTAL_RETURN_URL', 'https://hairlync.com/account'
+)
+
+#=====================================================================
 # Logging Settings
 #=====================================================================
 LOGGING = {

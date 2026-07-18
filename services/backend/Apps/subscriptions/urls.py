@@ -9,4 +9,8 @@ urlpatterns = [
     path('subscribe/', views.SubscriptionCreateView.as_view(), name='subscribe'),
     path('my/', views.SubscriptionDetailView.as_view(), name='subscription-detail'),
     path('history/', views.SubscriptionHistoryView.as_view(), name='subscription-history'),
+
+    path('stripe/checkout/', views.StripeCheckoutView.as_view(), name='stripe-checkout'),
+    path('stripe/webhook/', views.StripeWebhookView.as_view(), name='stripe-webhook'),
+    path('stripe/billing-portal/', views.StripeBillingPortalView.as_view(), name='stripe-billing-portal'),
 ]
