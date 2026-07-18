@@ -13,10 +13,10 @@ from django.conf.urls.static import static
 #=====================================================================
 schema_view = get_schema_view(
     openapi.Info(
-        title="HairIQ API",
+        title="HairLync API",
         default_version='v1',
         description="""
-        ## HairIQ REST API
+        ## HairLync REST API
         
         Intelligent hair analysis & recommendation platform connecting clients 
         with professional barbers and hairdressers.

@@ -992,14 +992,27 @@ class SubscriptionTests(TestCase):
         self.barber = User.objects.create_user(
             email='sub@t.com', password='p', is_active=True, role='barber'
         )
+        self.admin = User.objects.create_user(
+            email='sub-admin@t.com', password='p', is_active=True, role='admin'
+        )
         self.plan = SubscriptionPlan.objects.create(
             name='Pro Monthly', billing_cycle='monthly', price=29.99
         )
         self.api.force_authenticate(user=self.barber)
 
-    def test_subscribe(self):
+    def test_barber_cannot_self_subscribe_manually(self):
+        # /subscribe/ is admin/internal-only now (see PAYMENT_SYSTEM_CURRENT_FLOW_ANALYSIS.md
+        # / Apps.subscriptions security fix) — real self-service purchases go
+        # through Stripe Checkout instead.
         r = self.api.post('/api/v1/subscriptions/subscribe/', {
             'plan_id': self.plan.id
+        }, format='json')
+        self.assertEqual(r.status_code, 403)
+
+    def test_admin_can_manually_subscribe_a_barber(self):
+        self.api.force_authenticate(user=self.admin)
+        r = self.api.post('/api/v1/subscriptions/subscribe/', {
+            'plan_id': self.plan.id, 'user_id': self.barber.id,
         }, format='json')
         self.assertEqual(r.status_code, 201)
         self.barber.refresh_from_db()

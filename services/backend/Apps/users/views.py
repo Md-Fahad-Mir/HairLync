@@ -70,7 +70,7 @@ class RegisterView(APIView):
         # Send OTP email
         try:
             send_mail(
-                subject='HairIQ - Email Verification OTP',
+                subject='HairLync - Email Verification OTP',
                 message=f'Your verification code is: {otp}\n\nThis code expires in 15 minutes.',
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
@@ -172,7 +172,7 @@ class ResendOTPView(APIView):
 
         try:
             send_mail(
-                subject='HairIQ - Email Verification OTP (Resent)',
+                subject='HairLync - Email Verification OTP (Resent)',
                 message=f'Your verification code is: {otp}\n\nThis code expires in 15 minutes.',
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
@@ -278,7 +278,7 @@ class ForgotPasswordView(APIView):
 
         try:
             send_mail(
-                subject='HairIQ - Password Reset OTP',
+                subject='HairLync - Password Reset OTP',
                 message=f'Your password reset code is: {otp}\n\nThis code expires in 15 minutes.',
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
