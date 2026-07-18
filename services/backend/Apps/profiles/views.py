@@ -27,9 +27,13 @@ User = get_user_model()
 # CLIENT PROFILE VIEWS
 # ==============================================================================
 class ClientProfileView(APIView):
-    """Get or create/update the client's profile."""
-    permission_classes = [IsAuthenticated, IsClient]
+    permission_classes = [IsAuthenticated]
 
+    def get_permissions(self):
+        if self.request.method in ["PUT", "PATCH", "POST"]:
+            return [IsAuthenticated(), IsClient()]
+        return [IsAuthenticated()]
+        
     @swagger_auto_schema(
         operation_description="Get the current client's profile.",
         responses={200: ClientProfileSerializer},
