@@ -19,6 +19,7 @@ class ClientProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientProfile
         exclude = ['user', 'created_at', 'updated_at']
+        # latitude and longitude are now included so clients can save their location
 
 
 # ==============================================================================
@@ -70,6 +71,28 @@ class BarberProfileListSerializer(serializers.ModelSerializer):
             'city', 'is_verified', 'average_rating', 'total_reviews',
             'is_accepting_clients', 'experience_years', 'specialties',
         ]
+
+
+class BarberProfileNearbySerializer(serializers.ModelSerializer):
+    """Barber listing serializer that includes the pre-annotated distance_km."""
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    distance_km = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BarberProfile
+        fields = [
+            'id', 'user', 'user_name', 'business_name', 'avatar', 'category',
+            'city', 'latitude', 'longitude', 'is_verified', 'average_rating',
+            'total_reviews', 'is_accepting_clients', 'experience_years',
+            'specialties', 'distance_km',
+        ]
+
+    def get_distance_km(self, obj):
+        """Return the ORM-annotated distance, rounded to 2 decimal places."""
+        dist = getattr(obj, 'distance_km', None)
+        if dist is None:
+            return None
+        return round(float(dist), 2)
 
 
 # ==============================================================================
@@ -135,6 +158,32 @@ class SalonProfileListSerializer(serializers.ModelSerializer):
 
     def get_employees_count(self, obj):
         return obj.employees.filter(is_active=True).count()
+
+
+class SalonProfileNearbySerializer(serializers.ModelSerializer):
+    """Salon listing serializer that includes the pre-annotated distance_km."""
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    employees_count = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SalonProfile
+        fields = [
+            'id', 'user', 'user_name', 'business_name', 'avatar',
+            'city', 'latitude', 'longitude', 'is_verified', 'average_rating',
+            'total_reviews', 'is_accepting_clients', 'experience_years',
+            'employees_count', 'distance_km',
+        ]
+
+    def get_employees_count(self, obj):
+        return obj.employees.filter(is_active=True).count()
+
+    def get_distance_km(self, obj):
+        """Return the ORM-annotated distance, rounded to 2 decimal places."""
+        dist = getattr(obj, 'distance_km', None)
+        if dist is None:
+            return None
+        return round(float(dist), 2)
 
 
 # ==============================================================================
