@@ -7,6 +7,7 @@ urlpatterns = [
     # Client profile
     path('client/', views.ClientProfileView.as_view(), name='client-profile'),
     path('clients/', views.ClientProfileListView.as_view(), name='client-list'),
+    path("clients/<int:pk>/", views.ClientProfileDetailView.as_view(), name="client-profile-detail"),
 
     # Barber profile (own)
     path('barber/', views.BarberProfileView.as_view(), name='barber-profile'),
