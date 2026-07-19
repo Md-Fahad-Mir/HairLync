@@ -23,6 +23,9 @@ RUN npm run build
 FROM nginx:1.27-alpine AS runner
 WORKDIR /usr/share/nginx/html
  
+# nodejs is required for the compose healthcheck (node -e "fetch(...)")
+RUN apk add --no-cache nodejs
+ 
 COPY --from=builder /app/dist /usr/share/nginx/html
  
 RUN printf '%s\n' \
