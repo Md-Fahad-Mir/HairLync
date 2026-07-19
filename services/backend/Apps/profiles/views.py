@@ -88,6 +88,21 @@ class ClientProfileListView(generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
 
+class ClientProfileDetailView(generics.RetrieveAPIView):
+    """Public view to see a client's profile."""
+    serializer_class = ClientProfileSerializer
+    permission_classes = [AllowAny]
+    lookup_field = "pk"
+
+    @swagger_auto_schema(
+        operation_description="View a client's public profile.",
+        tags=["Client"],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return ClientProfile.objects.filter(user__is_active=True)
 # ==============================================================================
 # BARBER PROFILE VIEWS
 # ==============================================================================
