@@ -2,7 +2,10 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import (
+    Q, ExpressionWrapper, F, FloatField, Func, Value,
+)
+import math
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
@@ -10,7 +13,9 @@ from .models import ClientProfile, BarberProfile, SalonProfile, SalonEmployee
 from .serializers import (
     ClientProfileSerializer, ClientProfileUpdateSerializer,
     BarberProfileSerializer, BarberProfileUpdateSerializer, BarberProfileListSerializer,
+    BarberProfileNearbySerializer,
     SalonProfileSerializer, SalonProfileUpdateSerializer, SalonProfileListSerializer,
+    SalonProfileNearbySerializer,
     SalonEmployeeSerializer, SalonEmployeePublicSerializer,
     SalonEmployeeCreateSerializer, SalonEmployeeUpdateSerializer,
 )
@@ -21,6 +26,121 @@ from Apps.users.permissions import (
 from Apps.users.utils import success_response, error_response
 
 User = get_user_model()
+
+
+# ------------------------------------------------------------------------------
+# Haversine distance annotation (database-level, no Python loop)
+# ------------------------------------------------------------------------------
+def _haversine_qs(qs, client_lat, client_lon, radius_km=10):
+    """
+    Annotate *qs* with ``distance_km`` using a pure-SQL Haversine expression
+    and return only rows within *radius_km*, ordered nearest first.
+
+    Works on both SQLite (math functions available since SQLite 3.x) and
+    PostgreSQL without requiring PostGIS.
+
+    Formula:
+        a  = sin²(Δlat/2) + cos(lat1)·cos(lat2)·sin²(Δlon/2)
+        km = 2 · R · asin(√a)   where R = 6371 km
+    """
+    R = 6371.0  # Earth radius in km
+
+    lat1_rad = math.radians(float(client_lat))
+    lon1_rad = math.radians(float(client_lon))
+
+    # Annotate barber/salon lat & lon as floats (DecimalField → float cast)
+    qs = qs.annotate(
+        _lat2=ExpressionWrapper(F('latitude'), output_field=FloatField()),
+        _lon2=ExpressionWrapper(F('longitude'), output_field=FloatField()),
+    )
+
+    # Convert provider lat/lon to radians
+    qs = qs.annotate(
+        _lat2_rad=ExpressionWrapper(
+            F('_lat2') * Value(math.pi / 180.0),
+            output_field=FloatField(),
+        ),
+        _lon2_rad=ExpressionWrapper(
+            F('_lon2') * Value(math.pi / 180.0),
+            output_field=FloatField(),
+        ),
+    )
+
+    # Δlat and Δlon in radians
+    qs = qs.annotate(
+        _dlat=ExpressionWrapper(
+            F('_lat2_rad') - Value(lat1_rad),
+            output_field=FloatField(),
+        ),
+        _dlon=ExpressionWrapper(
+            F('_lon2_rad') - Value(lon1_rad),
+            output_field=FloatField(),
+        ),
+    )
+
+    # sin²(Δlat/2)
+    qs = qs.annotate(
+        _sin_dlat=ExpressionWrapper(
+            Func(F('_dlat') * Value(0.5), function='SIN', output_field=FloatField()),
+            output_field=FloatField(),
+        ),
+    )
+    qs = qs.annotate(
+        _a_lat=ExpressionWrapper(
+            F('_sin_dlat') * F('_sin_dlat'),
+            output_field=FloatField(),
+        ),
+    )
+
+    # sin²(Δlon/2)
+    qs = qs.annotate(
+        _sin_dlon=ExpressionWrapper(
+            Func(F('_dlon') * Value(0.5), function='SIN', output_field=FloatField()),
+            output_field=FloatField(),
+        ),
+    )
+    qs = qs.annotate(
+        _a_lon=ExpressionWrapper(
+            F('_sin_dlon') * F('_sin_dlon'),
+            output_field=FloatField(),
+        ),
+    )
+
+    # cos(lat1) · cos(lat2)
+    qs = qs.annotate(
+        _cos_lat2=ExpressionWrapper(
+            Func(F('_lat2_rad'), function='COS', output_field=FloatField()),
+            output_field=FloatField(),
+        ),
+        _cos_lat1=Value(math.cos(lat1_rad), output_field=FloatField()),
+    )
+
+    # a  = sin²(Δlat/2) + cos(lat1)·cos(lat2)·sin²(Δlon/2)
+    qs = qs.annotate(
+        _a=ExpressionWrapper(
+            F('_a_lat') + F('_cos_lat1') * F('_cos_lat2') * F('_a_lon'),
+            output_field=FloatField(),
+        ),
+    )
+
+    # c = 2 · asin(√a)  → distance_km = R · c
+    qs = qs.annotate(
+        _sqrt_a=ExpressionWrapper(
+            Func(F('_a'), function='SQRT', output_field=FloatField()),
+            output_field=FloatField(),
+        ),
+    )
+    qs = qs.annotate(
+        distance_km=ExpressionWrapper(
+            Value(2.0 * R) * Func(F('_sqrt_a'), function='ASIN', output_field=FloatField()),
+            output_field=FloatField(),
+        ),
+    )
+
+    # Filter within radius and order nearest first
+    qs = qs.filter(distance_km__lte=radius_km).order_by('distance_km')
+    return qs
+
 
 
 # ==============================================================================
@@ -501,3 +621,136 @@ class SalonEmployeeSelfProfileView(APIView):
             data=SalonEmployeeSerializer(employee).data,
             message="Profile updated successfully.",
         )
+
+
+# ==============================================================================
+# NEARBY BARBER & SALON VIEWS
+# ==============================================================================
+class BarberNearbyView(generics.ListAPIView):
+    """
+    Return barbers within 10 km of the authenticated client's saved location,
+    sorted from nearest to farthest.
+
+    Requires the client to have saved ``latitude`` and ``longitude`` on their
+    ``ClientProfile``.  Barbers without valid coordinates are excluded.
+    The ``distance_km`` field in each result is calculated entirely in the
+    database using the Haversine formula — no Python-level iteration.
+    """
+    serializer_class = BarberProfileNearbySerializer
+    permission_classes = [IsAuthenticated]
+    # Preserve existing filter/search/ordering backends from global settings
+    filterset_fields = ['category', 'city', 'is_verified', 'is_accepting_clients']
+    search_fields = ['business_name', 'city', 'user__full_name']
+
+    @swagger_auto_schema(
+        operation_description=(
+            "List barbers within 10 km of the client's saved location, "
+            "sorted nearest to farthest. Requires the client to have set "
+            "latitude & longitude on their profile. "
+            "Returns distance_km rounded to 2 decimal places."
+        ),
+        manual_parameters=[
+            openapi.Parameter(
+                'category', openapi.IN_QUERY,
+                description="Filter by category (barber/hairdresser/stylist…)",
+                type=openapi.TYPE_STRING,
+            ),
+            openapi.Parameter(
+                'city', openapi.IN_QUERY,
+                description="Filter by city",
+                type=openapi.TYPE_STRING,
+            ),
+            openapi.Parameter(
+                'search', openapi.IN_QUERY,
+                description="Search by business name or owner name",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
+        tags=['Nearby'],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        # Resolve client location
+        try:
+            client_profile = ClientProfile.objects.get(user=self.request.user)
+        except ClientProfile.DoesNotExist:
+            return BarberProfile.objects.none()
+
+        client_lat = client_profile.latitude
+        client_lon = client_profile.longitude
+
+        if client_lat is None or client_lon is None:
+            return BarberProfile.objects.none()
+
+        # Base queryset: active barbers with valid coordinates
+        qs = BarberProfile.objects.filter(
+            user__is_active=True,
+            latitude__isnull=False,
+            longitude__isnull=False,
+        ).select_related('user')
+
+        return _haversine_qs(qs, client_lat, client_lon, radius_km=10)
+
+
+class SalonNearbyView(generics.ListAPIView):
+    """
+    Return salons within 10 km of the authenticated client's saved location,
+    sorted from nearest to farthest.
+
+    Requires the client to have saved ``latitude`` and ``longitude`` on their
+    ``ClientProfile``.  Salons without valid coordinates are excluded.
+    The ``distance_km`` field in each result is calculated entirely in the
+    database using the Haversine formula — no Python-level iteration.
+    """
+    serializer_class = SalonProfileNearbySerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['city', 'is_verified', 'is_accepting_clients']
+    search_fields = ['business_name', 'city', 'user__full_name']
+
+    @swagger_auto_schema(
+        operation_description=(
+            "List salons within 10 km of the client's saved location, "
+            "sorted nearest to farthest. Requires the client to have set "
+            "latitude & longitude on their profile. "
+            "Returns distance_km rounded to 2 decimal places."
+        ),
+        manual_parameters=[
+            openapi.Parameter(
+                'city', openapi.IN_QUERY,
+                description="Filter by city",
+                type=openapi.TYPE_STRING,
+            ),
+            openapi.Parameter(
+                'search', openapi.IN_QUERY,
+                description="Search by business name or owner name",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
+        tags=['Nearby'],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        # Resolve client location
+        try:
+            client_profile = ClientProfile.objects.get(user=self.request.user)
+        except ClientProfile.DoesNotExist:
+            return SalonProfile.objects.none()
+
+        client_lat = client_profile.latitude
+        client_lon = client_profile.longitude
+
+        if client_lat is None or client_lon is None:
+            return SalonProfile.objects.none()
+
+        # Base queryset: active salons with valid coordinates
+        qs = SalonProfile.objects.filter(
+            user__is_active=True,
+            latitude__isnull=False,
+            longitude__isnull=False,
+        ).select_related('user')
+
+        return _haversine_qs(qs, client_lat, client_lon, radius_km=10)

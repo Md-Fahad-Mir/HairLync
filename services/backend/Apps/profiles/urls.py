@@ -16,6 +16,7 @@ urlpatterns = [
     # Barber public
     path('barber/<int:pk>/', views.BarberProfileDetailView.as_view(), name='barber-detail'),
     path('barbers/search/', views.BarberSearchView.as_view(), name='barber-search'),
+    path('barbers/nearby/', views.BarberNearbyView.as_view(), name='barber-nearby'),
 
     # Salon profile (own)
     path('salon/', views.SalonProfileView.as_view(), name='salon-profile'),
@@ -23,6 +24,7 @@ urlpatterns = [
     # Salon public
     path('salon/<int:pk>/', views.SalonProfileDetailView.as_view(), name='salon-detail'),
     path('salons/search/', views.SalonSearchView.as_view(), name='salon-search'),
+    path('salons/nearby/', views.SalonNearbyView.as_view(), name='salon-nearby'),
 
     # Salon employee management (salon owner only)
     path('salon/employees/', views.SalonEmployeeListCreateView.as_view(), name='salon-employee-list-create'),
