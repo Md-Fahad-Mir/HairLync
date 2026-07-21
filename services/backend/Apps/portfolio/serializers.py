@@ -3,15 +3,15 @@ from .models import PortfolioItem
 
 
 class PortfolioItemSerializer(serializers.ModelSerializer):
-    barber_name = serializers.CharField(source='barber.business_name', read_only=True)
+    owner_name = serializers.CharField(source='get_owner_name', read_only=True)
 
     class Meta:
         model = PortfolioItem
         fields = '__all__'
-        read_only_fields = ['barber', 'created_at', 'updated_at']
+        read_only_fields = ['barber', 'salon', 'salon_employee', 'created_at', 'updated_at']
 
 
 class PortfolioItemCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = PortfolioItem
-        exclude = ['barber', 'created_at', 'updated_at']
+        exclude = ['barber', 'salon', 'salon_employee', 'created_at', 'updated_at']
