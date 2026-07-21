@@ -68,7 +68,7 @@ class PortfolioItem(models.Model):
         elif self.owner_type == 'salon' and self.salon:
             return self.salon.business_name
         elif self.owner_type == 'salon_employee' and self.salon_employee:
-            return self.salon_employee.full_name
+            return self.salon_employee.user.full_name
         return 'Unknown'
 
     def __str__(self):
