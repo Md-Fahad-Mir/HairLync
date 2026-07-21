@@ -199,4 +199,40 @@ class BarberPortfolioPublicView(generics.ListAPIView):
 
     def get_queryset(self):
         barber_id = self.kwargs.get('barber_id')
-        return PortfolioItem.objects.filter(barber_id=barber_id)
+        return PortfolioItem.objects.filter(barber_id=barber_id, owner_type='barber')
+
+
+class SalonPortfolioPublicView(generics.ListAPIView):
+    """Public view of a salon's portfolio."""
+    serializer_class = PortfolioItemSerializer
+    permission_classes = [AllowAny]
+    filterset_fields = ['category']
+
+    @swagger_auto_schema(
+        operation_description="View a salon's portfolio (public).",
+        tags=['Salon Search'],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        salon_id = self.kwargs.get('salon_id')
+        return PortfolioItem.objects.filter(salon_id=salon_id, owner_type='salon')
+
+
+class SalonEmployeePortfolioPublicView(generics.ListAPIView):
+    """Public view of a salon employee's portfolio."""
+    serializer_class = PortfolioItemSerializer
+    permission_classes = [AllowAny]
+    filterset_fields = ['category']
+
+    @swagger_auto_schema(
+        operation_description="View a salon employee's portfolio (public).",
+        tags=['Salon Search'],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        employee_id = self.kwargs.get('employee_id')
+        return PortfolioItem.objects.filter(salon_employee_id=employee_id, owner_type='salon_employee')
