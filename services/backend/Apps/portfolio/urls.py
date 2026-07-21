@@ -5,7 +5,7 @@ app_name = 'portfolio'
 
 urlpatterns = [
     # Barber portfolio (backward compatible)
-    path('barber/', views.BarberPortfolioListCreateView.as_view(), name='portfolio-list-create'),
+    path('barber/my/', views.BarberPortfolioListCreateView.as_view(), name='portfolio-list-create'),
     path('barber/<int:pk>/', views.PortfolioDetailView.as_view(), name='portfolio-detail'),
 
     # Salon portfolio
@@ -18,4 +18,6 @@ urlpatterns = [
 
     # Public views
     path('barber/<int:barber_id>/', views.BarberPortfolioPublicView.as_view(), name='barber-portfolio-public'),
+    path('salon/<int:salon_id>/', views.SalonPortfolioPublicView.as_view(), name='salon-portfolio-public'),
+    path('employee/<int:employee_id>/', views.SalonEmployeePortfolioPublicView.as_view(), name='employee-portfolio-public'),
 ]
