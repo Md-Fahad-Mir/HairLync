@@ -5,12 +5,12 @@ from drf_yasg.utils import swagger_auto_schema
 
 from .models import PortfolioItem
 from .serializers import PortfolioItemSerializer, PortfolioItemCreateSerializer
-from Apps.users.permissions import IsBarber
+from Apps.users.permissions import IsBarber, IsSalon, IsSalonOrEmployee
 from Apps.users.utils import success_response, error_response
-from Apps.profiles.models import BarberProfile
+from Apps.profiles.models import BarberProfile, SalonProfile, SalonEmployee
 
 
-class PortfolioListCreateView(APIView):
+class BarberPortfolioListCreateView(APIView):
     """List and create portfolio items for the current barber."""
     permission_classes = [IsAuthenticated, IsBarber]
 
@@ -43,7 +43,89 @@ class PortfolioListCreateView(APIView):
 
         serializer = PortfolioItemCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        item = serializer.save(barber=barber_profile)
+        item = serializer.save(barber=barber_profile, owner_type='barber')
+        return success_response(
+            data=PortfolioItemSerializer(item).data,
+            message="Portfolio item added successfully.",
+            status_code=201,
+        )
+
+
+class SalonPortfolioListCreateView(APIView):
+    """List and create portfolio items for the current salon."""
+    permission_classes = [IsAuthenticated, IsSalon]
+
+    @swagger_auto_schema(
+        operation_description="List all your salon's portfolio items.",
+        responses={200: PortfolioItemSerializer(many=True)},
+        tags=['Portfolio'],
+    )
+    def get(self, request):
+        try:
+            salon_profile = request.user.salon_profile
+        except (SalonProfile.DoesNotExist, AttributeError):
+            return error_response("Salon profile not found.", status_code=404)
+
+        items = PortfolioItem.objects.filter(salon=salon_profile)
+        serializer = PortfolioItemSerializer(items, many=True)
+        return success_response(data=serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Add a new portfolio item to your salon.",
+        request_body=PortfolioItemCreateSerializer,
+        responses={201: PortfolioItemSerializer},
+        tags=['Portfolio'],
+    )
+    def post(self, request):
+        try:
+            salon_profile = request.user.salon_profile
+        except (SalonProfile.DoesNotExist, AttributeError):
+            return error_response("Salon profile not found.", status_code=404)
+
+        serializer = PortfolioItemCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(salon=salon_profile, owner_type='salon')
+        return success_response(
+            data=PortfolioItemSerializer(item).data,
+            message="Portfolio item added successfully.",
+            status_code=201,
+        )
+
+
+class SalonEmployeePortfolioListCreateView(APIView):
+    """List and create portfolio items for a salon employee."""
+    permission_classes = [IsAuthenticated, IsSalonOrEmployee]
+
+    @swagger_auto_schema(
+        operation_description="List all your portfolio items as a salon employee.",
+        responses={200: PortfolioItemSerializer(many=True)},
+        tags=['Portfolio'],
+    )
+    def get(self, request):
+        try:
+            employee = request.user.employee_profile
+        except (SalonEmployee.DoesNotExist, AttributeError):
+            return error_response("Employee profile not found.", status_code=404)
+
+        items = PortfolioItem.objects.filter(salon_employee=employee)
+        serializer = PortfolioItemSerializer(items, many=True)
+        return success_response(data=serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Add a new portfolio item as a salon employee.",
+        request_body=PortfolioItemCreateSerializer,
+        responses={201: PortfolioItemSerializer},
+        tags=['Portfolio'],
+    )
+    def post(self, request):
+        try:
+            employee = request.user.employee_profile
+        except (SalonEmployee.DoesNotExist, AttributeError):
+            return error_response("Employee profile not found.", status_code=404)
+
+        serializer = PortfolioItemCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(salon_employee=employee, owner_type='salon_employee')
         return success_response(
             data=PortfolioItemSerializer(item).data,
             message="Portfolio item added successfully.",
@@ -53,7 +135,7 @@ class PortfolioListCreateView(APIView):
 
 class PortfolioDetailView(APIView):
     """Update or delete a portfolio item."""
-    permission_classes = [IsAuthenticated, IsBarber]
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Update a portfolio item.",
@@ -84,9 +166,21 @@ class PortfolioDetailView(APIView):
         return success_response(message="Portfolio item deleted.")
 
     def _get_item(self, request, pk):
+        """Get portfolio item if it belongs to the current user."""
         try:
-            return PortfolioItem.objects.get(pk=pk, barber=request.user.barber_profile)
-        except (PortfolioItem.DoesNotExist, BarberProfile.DoesNotExist):
+            item = PortfolioItem.objects.get(pk=pk)
+            # Check ownership based on owner type
+            if item.owner_type == 'barber':
+                if hasattr(request.user, 'barber_profile') and item.barber == request.user.barber_profile:
+                    return item
+            elif item.owner_type == 'salon':
+                if hasattr(request.user, 'salon_profile') and item.salon == request.user.salon_profile:
+                    return item
+            elif item.owner_type == 'salon_employee':
+                if hasattr(request.user, 'employee_profile') and item.salon_employee == request.user.employee_profile:
+                    return item
+            return None
+        except PortfolioItem.DoesNotExist:
             return None
 
 
