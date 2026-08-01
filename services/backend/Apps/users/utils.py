@@ -70,3 +70,4 @@ def error_response(message="Error", errors=None, status_code=400):
     if errors is not None:
         response['errors'] = errors
     return Response(response, status=status_code)
+
