@@ -18,6 +18,8 @@ import { Overview } from "./components/overview/Overview.jsx";
 import { UserManagement } from "./components/user management/UserManagement.jsx";
 import { AuthFlow } from "./components/auth/AuthFlow.jsx";
 import { Settings as SettingsView } from "./components/settings/Settings.jsx";
+import { ProfileView } from "./components/settings/ProfileView.jsx";
+import { ChangePasswordView } from "./components/settings/ChangePasswordView.jsx";
 import { TermsAndCondition } from "./components/terms and condition/TermsAndCondition.jsx";
 const nav = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -26,22 +28,59 @@ const nav = [
   { id: "terms", label: "Terms & Condition", icon: FileText }
 ];
 function App() {
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [active, setActive] = useState("overview");
+  const [isSignedIn, setIsSignedIn] = useState(() => Boolean(localStorage.getItem("accessToken")));
+  const [active, setActive] = useState(() => (localStorage.getItem("accessToken") ? "overview" : null));
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const current = nav.find((n) => n.id === active);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const current = nav.find((n) => n.id === active) || { label: active === "profile" ? "Profile" : active === "change-password" ? "Change Password" : "Overview" };
   const navigate = (id) => {
     setActive(id);
     setSidebarOpen(false);
   };
   const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     setIsSignedIn(false);
-    setActive("overview");
+    setUser(null);
+    setActive(null);
     setSidebarOpen(false);
   };
 
   if (!isSignedIn) {
-    return /* @__PURE__ */ jsx(AuthFlow, { onSignIn: () => setIsSignedIn(true) });
+    return /* @__PURE__ */ jsxs("div", { className: "min-h-screen bg-[#0d1117] text-[#e6edf3]", children: [
+      /* @__PURE__ */ jsx(
+        Toaster,
+        {
+          position: "top-right",
+          toastOptions: {
+            style: {
+              background: "#161b22",
+              border: "1px solid #30363d",
+              color: "#e6edf3"
+            }
+          }
+        }
+      ),
+      /* @__PURE__ */ jsx(AuthFlow, { onSignIn: (userData) => {
+        setIsSignedIn(true);
+        setActive("overview");
+        setUser(userData || (() => {
+          try {
+            return JSON.parse(localStorage.getItem("user"));
+          } catch {
+            return null;
+          }
+        })());
+      } })
+    ] });
   }
 
   return /* @__PURE__ */ jsxs("div", { className: "min-h-screen bg-[#0d1117] text-[#e6edf3] flex", style: { fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }, children: [
@@ -92,10 +131,10 @@ function App() {
       }) }),
       /* @__PURE__ */ jsx("div", { className: "px-3 py-4 border-t border-[#30363d]", children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col gap-2", children: [
         /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-3 px-3 py-2 rounded-lg", children: [
-          /* @__PURE__ */ jsx("div", { className: "w-8 h-8 rounded-full bg-gradient-to-br from-[#f2cc60] to-[#f85149] flex items-center justify-center text-white text-xs shrink-0", children: "SA" }),
+          /* @__PURE__ */ jsx("div", { className: "w-8 h-8 rounded-full bg-gradient-to-br from-[#f2cc60] to-[#f85149] flex items-center justify-center text-white text-xs shrink-0", children: (user?.full_name || user?.email || "SA").charAt(0).toUpperCase() }),
           /* @__PURE__ */ jsxs("div", { className: "flex-1 min-w-0", children: [
-            /* @__PURE__ */ jsx("p", { className: "text-[#e6edf3] text-sm truncate", children: "Super Admin" }),
-            /* @__PURE__ */ jsx("p", { className: "text-[#8b949e] text-xs", children: "admin@hairiq.com" })
+            /* @__PURE__ */ jsx("p", { className: "text-[#e6edf3] text-sm truncate", children: user?.full_name || "Super Admin" }),
+            /* @__PURE__ */ jsx("p", { className: "text-[#8b949e] text-xs", children: user?.email || "admin@hairiq.com" })
           ] })
         ] }),
         /* @__PURE__ */ jsx("button", { onClick: handleLogout, className: "flex items-center justify-center gap-2 rounded-lg border border-[#30363d] px-3 py-2 text-sm text-[#f85149] transition hover:bg-[#3a1f1f] hover:text-[#ff7b72] cursor-pointer", children: [
@@ -118,12 +157,14 @@ function App() {
           /* @__PURE__ */ jsx(ChevronRight, { size: 12 }),
           /* @__PURE__ */ jsx("span", { className: "text-[#e6edf3]", children: current.label })
         ] }) }),
-        /* @__PURE__ */ jsx("div", { className: "flex items-center", children: /* @__PURE__ */ jsx("div", { className: "flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#58a6ff] to-[#ab7df8] text-sm font-semibold text-white", children: "SA" }) })
+        /* @__PURE__ */ jsx("div", { className: "flex items-center", children: /* @__PURE__ */ jsx("div", { className: "flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#58a6ff] to-[#ab7df8] text-sm font-semibold text-white", children: (user?.full_name || user?.email || "SA").charAt(0).toUpperCase() }) })
       ] }),
       /* @__PURE__ */ jsxs("main", { className: "flex-1 px-4 sm:px-6 py-6", children: [
         active === "overview" && /* @__PURE__ */ jsx(Overview, {}),
         active === "users" && /* @__PURE__ */ jsx(UserManagement, {}),
-        active === "settings" && /* @__PURE__ */ jsx(SettingsView, {}),
+        active === "settings" && /* @__PURE__ */ jsx(SettingsView, { onOpenProfile: () => setActive("profile"), onOpenChangePassword: () => setActive("change-password") }),
+        active === "profile" && /* @__PURE__ */ jsx(ProfileView, { onBack: () => setActive("settings") }),
+        active === "change-password" && /* @__PURE__ */ jsx(ChangePasswordView, { onBack: () => setActive("settings") }),
         active === "terms" && /* @__PURE__ */ jsx(TermsAndCondition, {})
       ] })
     ] })

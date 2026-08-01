@@ -9,6 +9,7 @@ export function Signin({
   setShowPassword,
   handleSignIn,
   onForgotPassword,
+  isSubmitting,
 }) {
   return (
     <form onSubmit={handleSignIn} className="space-y-4">
@@ -64,9 +65,10 @@ export function Signin({
 
       <button
         type="submit"
-        className="w-full rounded-lg bg-[#58a6ff] px-4 py-2.5 text-sm font-semibold text-[#0d1117] transition hover:bg-[#79b8ff] cursor-pointer"
+        disabled={isSubmitting}
+        className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-[#0d1117] transition ${isSubmitting ? "bg-[#3e6bbf] cursor-not-allowed" : "bg-[#58a6ff] hover:bg-[#79b8ff] cursor-pointer"}`}
       >
-        Sign In
+        {isSubmitting ? "Signing in..." : "Sign In"}
       </button>
     </form>
   );
