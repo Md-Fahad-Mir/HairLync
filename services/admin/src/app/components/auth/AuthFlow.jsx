@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { ENDPOINTS } from "../../../api/endpoints.js";
+import { baseApi } from "../../../api/baseApi.js";
 import { Signin } from "./Signin";
 import { ForgotPassword } from "./ForgotPassword";
 import { VerifyOtp } from "./VerifyOtp";
@@ -17,17 +19,40 @@ export function AuthFlow({ onSignIn }) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const otpRefs = useRef([]);
 
-  const handleSignIn = (event) => {
+  const handleSignIn = async (event) => {
     event.preventDefault();
+
     if (!email.trim() || !password.trim()) {
       setError("Please enter your email and password.");
       return;
     }
+
     setError("");
-    toast.success("Signed in successfully");
-    onSignIn?.();
+    setIsSubmitting(true);
+
+    try {
+      const { data } = await baseApi.post(ENDPOINTS.login, { email, password });
+
+      if (!data?.access || !data?.refresh || !data?.user) {
+        setError("Login failed: unexpected server response.");
+        return;
+      }
+
+      localStorage.setItem("accessToken", data.access);
+      localStorage.setItem("refreshToken", data.refresh);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      toast.success("Signed in successfully");
+      onSignIn?.(data.user);
+    } catch (err) {
+      const message = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "Unable to sign in. Please try again.";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleForgotPassword = (event) => {
@@ -144,6 +169,7 @@ export function AuthFlow({ onSignIn }) {
             setShowPassword={setShowPassword}
             handleSignIn={handleSignIn}
             onForgotPassword={goToForgotPassword}
+            isSubmitting={isSubmitting}
           />
         )}
 
