@@ -159,3 +159,7 @@ temp/
 tmp/
 
 AWS.text
+# Large media files
+media file/
+*.webm
+*.mp4
