@@ -16,6 +16,21 @@
 
 ---
 
+## 🎬 Demo
+
+<div align="center">
+
+<video src="media%20file/video.webm" controls muted width="720">
+  Your browser does not support inline video playback.
+  <a href="media file/video.webm">Watch the demo video</a>.
+</video>
+
+📹 If the player above doesn't render, [watch/download the demo video directly](<media file/video.webm>).
+
+</div>
+
+---
+
 ## 📖 Overview
 
 HairLync is a full-stack marketplace that helps **clients** discover and book appointments with **barbers, hairdressers, and salons**, while giving professionals the tools to manage their business — portfolios, services, bookings, employees, and subscriptions.
@@ -30,29 +45,29 @@ The repository is a monorepo containing every service that makes up the product:
 
 ```text
                               ┌─────────────────────┐
-                              │   Landing Page       │  hairlync.com
-                              │   (React + Vite)      │  Marketing, sign-up, pricing
-                              └──────────┬───────────┘
+                              │   Landing Page      │  hairlync.com
+                              │   (React + Vite)    │  Marketing, sign-up, pricing
+                              └──────────┬──────────┘
                                          │
                               ┌──────────┴───────────┐
-                              │   Admin Dashboard     │  admin.hairlync.com
-                              │   (React + Vite)      │  Internal operations UI
+                              │   Admin Dashboard    │  admin.hairlync.com
+                              │   (React + Vite)     │  Internal operations UI
                               └──────────┬───────────┘
                                          │  REST / JWT
                     ┌────────────────────┴────────────────────┐
-                    │                                          │
-          ┌─────────┴─────────┐                     ┌─────────┴─────────┐
-          │  Backend API       │  ───── calls ────▶  │  AI Service        │
-          │  (Django + DRF)     │                     │  (FastAPI)          │
-          │  api.hairlync.com   │  ◀──── analysis ───  │  ai.hairlync.com    │
-          └─────────┬─────────┘                     └─────────────────────┘
+                    │                                         │
+          ┌─────────┴─────────┐                      ┌────────┴─────────┐
+          │  Backend API      │  ───── calls ────▶   │  AI Service      │
+          │  (Django + DRF)   │                      │  (FastAPI)       │
+          │  api.hairlync.com │  ◀──── analysis ───  │  ai.hairlync.com │
+          └─────────┬─────────┘                      └──────────────────┘
                     │
         ┌───────────┼────────────┐
         │           │            │
-   ┌────┴───┐  ┌────┴────┐  ┌────┴─────┐
-   │Postgres│  │  Stripe  │  │  AWS S3   │
-   │  RDS   │  │ Payments │  │ + CloudFront │
-   └────────┘  └──────────┘  └───────────┘
+   ┌────┴───┐  ┌────┴────┐  ┌────┴───────┐
+   │Postgres│  │  Stripe │  │  AWS S3    │
+   │  RDS   │  │ Payments│  │+ CloudFront│
+   └────────┘  └─────────┘  └────────────┘
 ```
 
 Every service ships as its own Docker image and is orchestrated with Docker Compose locally, and via Terraform + Ansible + GitHub Actions in staging/production on AWS.
