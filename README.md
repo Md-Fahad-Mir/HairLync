@@ -14,22 +14,7 @@
 
 </div>
 
----
 
-## 🎬 Demo
-
-<div align="center">
-
-<video src="media%20file/video.webm" controls muted width="720">
-  Your browser does not support inline video playback.
-  <a href="media file/video.webm">Watch the demo video</a>.
-</video>
-
-📹 If the player above doesn't render, [watch/download the demo video directly](<media file/video.webm>).
-
-</div>
-
----
 
 ## 📖 Overview
 
